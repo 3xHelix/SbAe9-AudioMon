@@ -5,6 +5,36 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## Unreleased
+
+Built on SbAe9-Kit, the base it now shares with Sound Blaster Command.
+
+### Added
+
+- **Palettes**: Helix (still the default), Command, Albino and Wololo, the same
+  as Sound Blaster Command (Settings → Window, or `--palette`).
+- **UI scale**: 70–150% (Settings → Window, or `--scale`).
+
+### Fixed
+
+- The meters' colour zones come from each palette's own meter colours (kit
+  0.3.1), so Albino shows green / gold / red instead of three shades of coral.
+- The peak-hold line uses the palette's handle edge colour: white as before on
+  the dark palettes, coral on Albino, where white vanished on the light bars.
+
+### Changed
+
+- The app is now a package (`audiomon/`) plus a launcher (`sbae9-audiomon`),
+  like SBC. `install.sh` installs a copy in `~/.local/share/sbae9-audiomon`
+  and links the command to it. The menu entry, command, settings, debug log
+  and meter node names are unchanged.
+- The theme, Glass, XWayland, relaunch, frameless title bar and edge grips,
+  app icon and AE-9 detection now come from the shared kit (`sbae9kit/`).
+- The tests run on the shared fake AE-9 (`sbae9kit.testing`). A new test
+  checks the vendored kit is unchanged, and that AudioMon never loads the
+  kit's mixer (it stays listen-only).
+- The icon tool moved to SbAe9-Kit.
+
 ## 0.2.1 (2026-11-06)
 
 ### Fixed

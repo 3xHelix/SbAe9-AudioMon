@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Launch SbAe9-AudioMon from wherever this script lives (a checkout, or the
+# copy install.sh puts in ~/.local/share/sbae9-audiomon).
+HERE="$(dirname "$(readlink -f "$0")")"
+exec python3 -c "import sys; sys.path.insert(0, sys.argv.pop(1)); from audiomon.__main__ import main; sys.exit(main())" "$HERE" "$@"

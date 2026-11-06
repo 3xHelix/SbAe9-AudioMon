@@ -1,0 +1,403 @@
+[
+ {
+  "name": "Playback Channel Map",
+  "type": 2,
+  "count": 6,
+  "min": 0,
+  "max": 36,
+  "items": [],
+  "writable": false,
+  "value": 3
+ },
+ {
+  "name": "PCM Bit Depth",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [
+   "24-bit",
+   "32-bit"
+  ],
+  "writable": true,
+  "value": 1
+ },
+ {
+  "name": "Head Unit Output",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [
+   "Speakers",
+   "Headphones"
+  ],
+  "writable": true,
+  "value": 0
+ },
+ {
+  "name": "Master Playback Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 254,
+  "items": [],
+  "writable": true,
+  "value": 178
+ },
+ {
+  "name": "Master Playback Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": true
+ },
+ {
+  "name": "XLR Gain Capture Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 2,
+  "items": [],
+  "writable": true,
+  "value": 1
+ },
+ {
+  "name": "Capture Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 99,
+  "items": [],
+  "writable": true,
+  "value": 99
+ },
+ {
+  "name": "DAC Filter",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 2,
+  "items": [
+   "Default",
+   "Fast",
+   "Slow"
+  ],
+  "writable": true,
+  "value": 1
+ },
+ {
+  "name": "Direct Mode Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": true
+ },
+ {
+  "name": "SBX Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "Speaker Config",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 4,
+  "items": [
+   "2.0",
+   "2.1",
+   "4.0",
+   "4.1",
+   "5.1"
+  ],
+  "writable": true,
+  "value": 1
+ },
+ {
+  "name": "FX Surround Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": true
+ },
+ {
+  "name": "FX Surround Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 100,
+  "items": [],
+  "writable": true,
+  "value": 67
+ },
+ {
+  "name": "FX Dialog Plus Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "FX Dialog Plus Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 100,
+  "items": [],
+  "writable": true,
+  "value": 50
+ },
+ {
+  "name": "FX Smart Volume Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": true
+ },
+ {
+  "name": "FX Smart Volume Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 100,
+  "items": [],
+  "writable": true,
+  "value": 74
+ },
+ {
+  "name": "FX Crystalizer Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": true
+ },
+ {
+  "name": "FX Crystalizer Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 100,
+  "items": [],
+  "writable": true,
+  "value": 65
+ },
+ {
+  "name": "FX Bass Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "FX Bass Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 100,
+  "items": [],
+  "writable": true,
+  "value": 50
+ },
+ {
+  "name": "FX Smart Volume Mode",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 2,
+  "items": [
+   "Normal",
+   "Loud",
+   "Night"
+  ],
+  "writable": true,
+  "value": 0
+ },
+ {
+  "name": "EQ Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ },
+ {
+  "name": "EQ Preset",
+  "type": 3,
+  "count": 1,
+  "min": 0,
+  "max": 19,
+  "items": [
+   "Acoustic",
+   "Cinema",
+   "Classical",
+   "Concert",
+   "Country",
+   "Dance",
+   "Flat",
+   "Gaming",
+   "Hip Hop",
+   "Jazz",
+   "Night",
+   "Pop",
+   "R&B",
+   "Rock",
+   "Stadium",
+   "Vocal",
+   "Project CARS",
+   "Racing",
+   "Rocket League",
+   "RPG"
+  ],
+  "writable": true,
+  "value": 6
+ },
+ {
+  "name": "EQ Pre-gain Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 31Hz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 62Hz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 125Hz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 250Hz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 500Hz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 1kHz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 2kHz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 4kHz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 8kHz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "EQ 16kHz Volume",
+  "type": 2,
+  "count": 1,
+  "min": 0,
+  "max": 24,
+  "items": [],
+  "writable": true,
+  "value": 12
+ },
+ {
+  "name": "Scout Mode Switch",
+  "type": 1,
+  "count": 1,
+  "min": 0,
+  "max": 1,
+  "items": [],
+  "writable": true,
+  "value": false
+ }
+]

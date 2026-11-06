@@ -10,18 +10,21 @@ import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import fakeae9 as F  # noqa: E402
+import support  # noqa: E402
 
-am = F.install()
-am.print = lambda *a, **k: None   # the app echoes its log to stdout; keep test output clean
+support.setup()
+
+from sbae9kit import desktop, testing  # noqa: E402
+from sbae9kit.testing import MIC, OPTICAL, SINK, WHAT_U_HEAR  # noqa: E402
+
+from audiomon import core, eventlog  # noqa: E402
+from audiomon import theme as T  # noqa: E402
+from audiomon.window import MainWindow  # noqa: E402
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 
-# Shorter waits so the suite runs in seconds (the logic doesn't change).
-am.WIRE_GRACE = 0.3
-am.SILENT_AFTER = 0.25
 
 
 def process(ms):
@@ -47,12 +50,12 @@ class MonitorTest(unittest.TestCase):
     card = dict()
 
     def setUp(self):
-        self.pw = F.reset(**self.card)
-        self.cfg = am.load_config()
+        self.pw = support.reset(**self.card)
+        self.cfg = core.load_config()
         self.cfg.update(mode="ae9", let_idle=self.let_idle, always_capture=self.always_capture,
                         page=0, frameless=False, glass=False, glass_opacity=70)
         self.log_path = os.path.join(os.environ["XDG_STATE_HOME"], f"{self.id()}.log")
-        self.win = am.MainWindow(self.cfg, am.EventLog(self.log_path))
+        self.win = MainWindow(self.cfg, eventlog.EventLog(self.log_path))
         self.win.show()
         process(300)
 
@@ -82,21 +85,22 @@ class MonitorTest(unittest.TestCase):
                 in_port = call[2]
                 port = self.pw.objects.get(in_port)
                 if port:
-                    self.assertTrue(self.pw.is_ours(port["info"]["props"]["node.id"]),
+                    self.assertEqual(self.pw.props(port["info"]["props"]["node.id"]).get("application.name"),
+                                     core.APP_NAME,
                                     f"linked into a node that isn't ours: {call}")
 
 
 class IdleCard(MonitorTest):
     def test_finds_the_card(self):
         log = self.log_text()
-        for name in (F.SINK, F.WUH, F.MIC, F.OPTICAL):
+        for name in (SINK, WHAT_U_HEAR, MIC, OPTICAL):
             self.assertIn(f"found {name}", log)
-        self.assertIn(F.FAKE_DRIVER, log)
+        self.assertIn(support.FAKE_DRIVER, log)
 
     def test_nothing_playing_lets_the_card_suspend(self):
         process(600)
-        self.assertEqual(self.pw.state(F.SINK), "suspended")
-        for name in (F.WUH, F.MIC, F.OPTICAL):
+        self.assertEqual(self.pw.state(SINK), "suspended")
+        for name in (WHAT_U_HEAR, MIC, OPTICAL):
             self.assertEqual(self.pw.state(name), "suspended", name)
         self.assertTrue(self.wired("monitor"))
         for key in ("wuh", "mic", "optical"):
@@ -118,7 +122,7 @@ class Playback(MonitorTest):
         panel = self.view.streams[sid][0]
         self.assertTrue(panel.capture.passive)
         self.assertTrue(wait_until(lambda: self.wired("wuh") and self.wired("mic")))
-        self.assertEqual(self.pw.state(F.SINK), "running")
+        self.assertEqual(self.pw.state(SINK), "running")
         process(400)
         self.assertTrue(panel.live)
         self.assertAlmostEqual(panel.tick_peak_db, -14, delta=0.5)
@@ -145,7 +149,7 @@ class Playback(MonitorTest):
         self.assertTrue(self.view.fixed["wuh"].alert)
         log = self.log_text()
         self.assertIn("SILENT #1 start: output monitor -12.0 dBFS, What U Hear -inf dBFS", log)
-        self.assertIn(F.FAKE_DRIVER, log.split("SILENT #1 start")[1])
+        self.assertIn(support.FAKE_DRIVER, log.split("SILENT #1 start")[1])
 
         self.pw.silent_restart = False        # the card comes back
         self.assertTrue(wait_until(lambda: not self.view.silence.active))
@@ -182,8 +186,8 @@ class CardComesAndGoes(MonitorTest):
         self.pw.card_present(True)
         self.assertTrue(wait_until(lambda: self.wired("monitor")))
         log = self.log_text()
-        self.assertIn(f"AE-9 Output (monitor): appeared {F.SINK}", log)
-        self.assertIn(F.FAKE_DRIVER, log.split("appeared " + F.SINK)[1].splitlines()[0])
+        self.assertIn(f"AE-9 Output (monitor): appeared {SINK}", log)
+        self.assertIn(support.FAKE_DRIVER, log.split("appeared " + SINK)[1].splitlines()[0])
 
         sid = self.pw.add_stream("Firefox", "after reload", -14)   # rewires after the return
         self.assertTrue(wait_until(lambda: self.wired("wuh") and sid in self.view.streams))
@@ -211,8 +215,8 @@ class KeepAwake(MonitorTest):
     def test_everything_wired_and_card_kept_running(self):
         self.assertTrue(wait_until(lambda: all(self.wired(k) for k in ("monitor", "wuh", "mic", "optical"))))
         process(600)
-        self.assertEqual(self.pw.state(F.SINK), "running")
-        self.assertEqual(self.pw.state(F.WUH), "running")
+        self.assertEqual(self.pw.state(SINK), "running")
+        self.assertEqual(self.pw.state(WHAT_U_HEAR), "running")
         self.assertFalse(self.view.fixed["monitor"].capture.passive)
 
 
@@ -222,8 +226,8 @@ class AlwaysCapture(MonitorTest):
     def test_inputs_wired_but_sink_can_suspend(self):
         self.assertTrue(wait_until(lambda: self.wired("wuh") and self.wired("mic")))
         process(600)
-        self.assertEqual(self.pw.state(F.SINK), "suspended")
-        self.assertEqual(self.pw.state(F.WUH), "running")
+        self.assertEqual(self.pw.state(SINK), "suspended")
+        self.assertEqual(self.pw.state(WHAT_U_HEAR), "running")
 
 
 class NoExtraSources(MonitorTest):
@@ -258,46 +262,46 @@ class QuickToggles(MonitorTest):
 class Glass(MonitorTest):
     def tearDown(self):
         super().tearDown()
-        am.GLASS = False
-        am.GLASS_OPACITY = 0.70
+        T.GLASS = False
+        T.GLASS_OPACITY = 0.70
         app.setStyleSheet("")
 
     def test_xwayland_only_for_glass_on_wayland(self):
         env = {"WAYLAND_DISPLAY": "wayland-1", "DISPLAY": ":0"}
-        am.use_xwayland(False, env)
+        desktop.use_xwayland(core.APP_ID, False, env)
         self.assertNotIn("QT_QPA_PLATFORM", env)
-        am.use_xwayland(True, env)
-        self.assertEqual(env.get("QT_QPA_PLATFORM"), "xcb" if am.xcb_available() else None)
-        am.use_xwayland(False, env)            # the next launch, Glass off: back to Wayland
+        desktop.use_xwayland(core.APP_ID, True, env)
+        self.assertEqual(env.get("QT_QPA_PLATFORM"), "xcb" if desktop.xcb_available() else None)
+        desktop.use_xwayland(core.APP_ID, False, env)            # the next launch, Glass off: back to Wayland
         self.assertNotIn("QT_QPA_PLATFORM", env)
         mine = {"WAYLAND_DISPLAY": "wayland-1", "DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland"}
-        am.use_xwayland(True, mine)            # one the user set is left alone
+        desktop.use_xwayland(core.APP_ID, True, mine)            # one the user set is left alone
         self.assertEqual(mine["QT_QPA_PLATFORM"], "wayland")
         x11 = {"DISPLAY": ":0"}
-        am.use_xwayland(True, x11)             # plain X11 session: nothing to do
+        desktop.use_xwayland(core.APP_ID, True, x11)             # plain X11 session: nothing to do
         self.assertNotIn("QT_QPA_PLATFORM", x11)
 
     def test_surfaces_go_see_through_and_opacity_is_live(self):
-        self.assertNotIn("rgba(18,15,33", am.stylesheet())   # title bar solid without Glass
-        am.GLASS = True
-        am.GLASS_OPACITY = 0.7
-        self.assertIn("#titleBar { background: rgba(18,15,33,0.7);", am.stylesheet())
-        self.assertIn("#root { background: transparent; }", am.stylesheet())
-        self.assertAlmostEqual(am.surface_q(am.T.GRAPH_BG, 0.85).alphaF(), 0.595, places=2)
+        self.assertNotIn("rgba(18,15,33", T.stylesheet())   # title bar solid without Glass
+        T.GLASS = True
+        T.GLASS_OPACITY = 0.7
+        self.assertIn("#titleBar { background: rgba(18,15,33,0.7);", T.stylesheet())
+        self.assertIn("#root { background: transparent; }", T.stylesheet())
+        self.assertAlmostEqual(T.surface_q(T.GRAPH_BG, 0.85).alphaF(), 0.595, places=2)
         self.cfg["glass"] = True
         self.win.settings.sync()
         self.win.settings.opacity.setValue(50)       # keyboard-style change applies at once
         self.assertEqual(self.cfg["glass_opacity"], 50)
-        self.assertEqual(am.GLASS_OPACITY, 0.5)
+        self.assertEqual(T.GLASS_OPACITY, 0.5)
         self.assertIn("rgba(18,15,33,0.5)", app.styleSheet())
         self.assertEqual(self.win.settings.opacity_lbl.text(), "50%")
 
     def test_toggling_glass_reopens_the_app(self):
         calls = []
-        self.win.restart = lambda: calls.append(1)
+        self.win.restart = lambda drop=(): calls.append(drop)
         self.assertFalse(self.win.settings.opacity.isEnabled())
         self.win.settings.glass_cb.click()
-        self.assertEqual(calls, [1])
+        self.assertEqual(calls, [("--glass", "--no-glass")])
         self.assertTrue(self.cfg["glass"])
         self.assertTrue(self.win.settings.opacity.isEnabled())
         self.assertIn("Glass turned on; reopening the window", self.log_text())

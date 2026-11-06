@@ -16,7 +16,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests"))
-import fakeae9 as F  # noqa: E402
+import support  # noqa: E402
 
 # (seconds into the loop, what happens, action)
 SCENARIO = [
@@ -51,9 +51,9 @@ def main():
         print(f"{LOOP:>3}s  (loop)")
         return 0
 
-    am = F.install(offscreen=False)
-    F.FakePipeWire.SUSPEND_AFTER = 3.0   # real PipeWire waits 5 s
-    pw = F.reset()
+    # TIME_SCALE 0.6: the card suspends 3 s after playback stops (real: 5 s)
+    support.setup(offscreen=False, time_scale=0.6, quiet=False)
+    pw = support.PW
     pw.jitter = 2.5                      # make the levels move like real audio
 
     from PySide6.QtCore import QTimer
@@ -61,11 +61,14 @@ def main():
     app = QApplication([sys.argv[0]])
     app.setApplicationName("SbAe9-AudioMon (fake AE-9)")
     app.setStyle("Fusion")
-    app.setStyleSheet(am.stylesheet())
-
-    cfg = am.load_config()
-    log = am.EventLog(am.LOG_PATH)       # LOG_PATH is under the temp XDG_STATE_HOME
-    win = am.MainWindow(cfg, log)
+    from audiomon import core, eventlog
+    from audiomon import theme as T
+    from audiomon.window import MainWindow
+    cfg = core.load_config()
+    T.apply(cfg["palette"])
+    app.setStyleSheet(T.stylesheet())
+    log = eventlog.EventLog(core.LOG_PATH)   # LOG_PATH is under the temp XDG_STATE_HOME
+    win = MainWindow(cfg, log)
     win.setWindowTitle("SbAe9-AudioMon — FAKE AE-9 (test rig)")
     win.title_bar.findChildren(type(win.state_lbl))[1].setText("FAKE AE-9")
     win.show()
@@ -77,14 +80,14 @@ def main():
         while state["step"] < len(SCENARIO) and t >= SCENARIO[state["step"]][0]:
             _, what, action = SCENARIO[state["step"]]
             log(f"[fake AE-9] {what}")
-            action(F.PW, state["streams"])
+            action(support.PW, state["streams"])
             state["step"] += 1
         if t >= LOOP:
             for sid in list(state["streams"].values()):
-                F.PW.stop_stream(sid)
+                support.PW.stop_stream(sid)
             state["streams"].clear()
-            F.PW.silent_restart = False
-            F.PW.mic_db = F.PW.optical_db = None
+            support.PW.silent_restart = False
+            support.PW.mic_db = support.PW.optical_db = None
             state.update(t0=time.monotonic(), step=0)
             log("[fake AE-9] scenario restarts")
 

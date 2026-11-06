@@ -1,8 +1,11 @@
 # SbAe9-AudioMon
 
 Lightweight PipeWire VU meters (Qt 6 / PySide6), with a debug mode for the
-Sound Blaster AE-9. Styled to match SbAe9-SBC (Sound Blaster Command for
-Linux) in its Helix palette.
+Sound Blaster AE-9. The listen-only companion to
+[SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC) (Sound Blaster Command for
+Linux). Both apps are built on one shared base,
+[SbAe9-Kit](https://github.com/3xHelix/SbAe9-Kit) (vendored here as
+`sbae9kit/`), so they look, run, install and test the same way.
 
 ## Window
 
@@ -13,7 +16,13 @@ Linux) in its Helix palette.
   - **Monitor:** the AE-9 meters, app streams and recent events.
   - **Event Log:** the full debug log, with a button to open the log file.
   - **Manual Meters:** two meters you wire by hand.
-  - **Settings:** monitoring options, the title bar choice, and driver/log/config info.
+  - **Settings:** monitoring options, the window options (title bar, Glass,
+    palette, UI scale) and driver/log/config info.
+- **Palettes:** Helix (the default), Command, Albino or Wololo, the same ones
+  as Sound Blaster Command (Settings → Window, or `--palette`). Changing it
+  rebuilds the window, so the meters restart for a moment.
+- **UI scale:** 70–150% (Settings → Window, or `--scale`). It reopens the
+  window and, on Wayland, runs it through XWayland, as SBC does.
 - **Glass** (Settings → Window, or `--glass`): see-through backgrounds, the
   same as Sound Blaster Command's Glass. Text, meters and controls stay solid.
   An Opacity slider (30–95%) works live. On KDE what's behind is frosted;
@@ -52,7 +61,7 @@ creates or removes are its own, from AE-9 / stream ports into its meter nodes.
 **SILENT flag.** Lights up (and counts a dropout) when the output monitor has
 signal (> -50 dBFS peak) but What U Hear stays below -60 dBFS for more than
 0.5 s. What U Hear is ignored for 1 s after it's (re)wired so it can start up.
-Thresholds are constants near the top of `sbae9-audiomon.py`.
+Thresholds are constants at the top of `audiomon/monitor.py`.
 
 **Let the AE-9 idle** (on by default). Meters must not stop the card from
 suspending:
@@ -101,34 +110,43 @@ On Fedora: `sudo dnf install python3-pyside6 python3-numpy pipewire-utils`
 
 ## Run
 
-    ./sbae9-audiomon.py                  # last-used mode (AE-9 mode the first time)
-    ./sbae9-audiomon.py --ae9            # AE-9 mode
-    ./sbae9-audiomon.py --ae9 --keep-awake
-    ./sbae9-audiomon.py --manual -c 8    # open on Manual Meters, two 8-channel meters
-    ./sbae9-audiomon.py --frame          # use the desktop's title bar
-    ./sbae9-audiomon.py --log /path/to/file.log
+From the checkout:
+
+    ./sbae9-audiomon                  # last-used settings (AE-9 mode the first time)
+    ./sbae9-audiomon --ae9            # AE-9 mode
+    ./sbae9-audiomon --ae9 --keep-awake
+    ./sbae9-audiomon --manual -c 8    # open on Manual Meters, two 8-channel meters
+    ./sbae9-audiomon --palette wololo --scale 120
+    ./sbae9-audiomon --frame          # use the desktop's title bar
+    ./sbae9-audiomon --log /path/to/file.log
 
 Install for your user (the `sbae9-audiomon` command, its icon and a menu entry):
 
     ./install.sh
 
-It copies the app to `~/.local/bin`, so re-run it after changing the app.
+It installs a **copy** of the app in `~/.local/share/sbae9-audiomon`, the same
+way as Sound Blaster Command, so the menu app is always the build you last
+installed. Re-run it after each tested change.
 
-The icon comes from `Neon VU Meter Diagnostics.png`. `tools/make_icons.py`,
-adapted from SbAe9-SBC's, cuts the rounded tile out of the artwork and writes
-`appicon/sbae9-audiomon-<size>.png` (16-512 px):
+## Layout
 
-    python3 tools/make_icons.py "Neon VU Meter Diagnostics.png"
+| Path | What it is |
+|---|---|
+| `sbae9-audiomon` | The launcher (runs the package from wherever it lives) |
+| `audiomon/` | The app: `core` (constants, config), `pipewire` (graph, linking, AE-9 nodes), `capture` (pw-record meters), `meters`, `monitor` (AE-9 wiring, SILENT), `widgets`, `window`, `theme`, `eventlog` |
+| `sbae9kit/` | The shared kit, vendored from SbAe9-Kit by its `tools/sync_kit.py`. Don't edit it here; `tests/test_kit.py` checks it's unchanged. AudioMon never imports its `mixer` (ALSA writes) |
+| `appicon/` | The app icon, 16–512 px, cut from `Neon VU Meter Diagnostics.png` by SbAe9-Kit's `tools/make_icons.py` |
+| `tests/`, `tools/fake_ae9.py` | Tests and the demo on the fake AE-9 |
 
 ## Testing without the card: the fake AE-9
 
-`tests/fakeae9.py` is a fake AE-9 test rig, built like SbAe9-SBC's. It starts
-from SBC's snapshot of the real machine (`tests/fixtures/pw_ae9_stereo.json`,
-copied from SbAe9-SBC) and fakes the PipeWire graph, the meters (`pw-record`)
-and `pw-link`:
+The tests run on the shared fake AE-9, `sbae9kit.testing`, the same rig
+Sound Blaster Command's tests use. `tests/support.py` plugs it into the app.
+It starts from a snapshot of the real machine and fakes the PipeWire graph,
+the meters (`pw-record`) and `pw-link`:
 - The sink runs while an app plays to it, goes idle when nothing does, then suspends.
 - What U Hear follows the output 3.1 dB lower, or goes silent to fake the bug.
-- Optical In delivers nothing without light on the jack.
+- Optical In sends digital silence without light on the jack, like the real card.
 - The card can drop off and come back.
 
 Nothing real is touched: no PipeWire, no card, no `~/.config`, and the debug
@@ -150,7 +168,9 @@ The tests cover:
 - keep-awake and always-capture modes;
 - an older driver with no What U Hear;
 - that every link goes only into our own meters, and that hand-made links are left alone;
-- the bottom-bar toggles staying in step with Settings.
+- the bottom-bar toggles staying in step with Settings;
+- Glass;
+- the vendored kit being unchanged, and AudioMon never loading the kit's mixer.
 
 The scenario plays music, lets the card idle and suspend, fakes a silent
 restart (SILENT), drops the card and brings it back, then lights up Optical In.
@@ -177,6 +197,8 @@ Saved to `~/.config/sbae9-audiomon/config.json`:
   "frameless": true,
   "glass": false,
   "glass_opacity": 70,
+  "palette": "helix",
+  "ui_scale": 100,
   "page": 0,
   "meters": [
     {"name": "sbae9-audiomon.in",  "label": "AudioMon In",  "channels": 2},

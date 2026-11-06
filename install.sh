@@ -1,23 +1,39 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
-# Installs SbAe9-AudioMon for the current user: the `sbae9-audiomon` command,
-# its icon and a menu entry. Re-run after changing the app to update the
-# installed copy (it's a copy, so the installed one only changes when you do).
+# Installs SbAe9-AudioMon for the current user: a copy of the app in
+# ~/.local/share/sbae9-audiomon, the `sbae9-audiomon` command, its icon and a
+# menu entry. It's a copy, like Sound Blaster Command's: the menu app is
+# always the build you last installed, never a half-edited working tree.
+# Re-run after each tested change to update it.
 set -e
 HERE="$(dirname "$(readlink -f "$0")")"
+APP="$HOME/.local/share/sbae9-audiomon"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
 ICONS="$HOME/.local/share/icons/hicolor"
 mkdir -p "$BIN" "$APPS"
 
-install -m 755 "$HERE/sbae9-audiomon.py" "$BIN/sbae9-audiomon"
-# app icon, one PNG per size (made by tools/make_icons.py, like SbAe9-SBC's)
+# the app: launcher, package, shared kit and icons, replacing the previous copy
+rm -rf "$APP.new"
+mkdir -p "$APP.new"
+install -m 755 "$HERE/sbae9-audiomon" "$APP.new/sbae9-audiomon"
+cp -r "$HERE/audiomon" "$HERE/sbae9kit" "$HERE/appicon" "$APP.new/"
+find "$APP.new" -name __pycache__ -prune -exec rm -rf {} +
+git -C "$HERE" describe --always --dirty > "$APP.new/BUILD" 2>/dev/null || echo build > "$APP.new/BUILD"
+rm -rf "$APP"
+mv "$APP.new" "$APP"
+# the command (before 0.3 it was a single-file copy; a link to the copy replaces it)
+rm -f "$BIN/sbae9-audiomon"
+ln -s "$APP/sbae9-audiomon" "$BIN/sbae9-audiomon"
+
+# app icon, one PNG per size (made by SbAe9-Kit's tools/make_icons.py)
 for png in "$HERE"/appicon/sbae9-audiomon-*.png; do
     size=$(basename "$png" .png); size=${size##*-}
     install -D -m 644 "$png" "$ICONS/${size}x${size}/apps/sbae9-audiomon.png"
 done
 rm -f "$ICONS/scalable/apps/sbae9-audiomon.svg"     # the old icon, so it doesn't win
 touch "$ICONS"
+
 cat > "$APPS/sbae9-audiomon.desktop" <<DESK
 [Desktop Entry]
 Type=Application
@@ -33,5 +49,5 @@ StartupWMClass=sbae9-audiomon
 DESK
 update-desktop-database "$APPS" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$ICONS" 2>/dev/null || true
-echo "Installed $(git -C "$HERE" describe --always --dirty 2>/dev/null || echo build) to $BIN/sbae9-audiomon."
+echo "Installed $(cat "$APP/BUILD") to $APP."
 echo "Launch 'SbAe9-AudioMon' from the menu or run: sbae9-audiomon"
