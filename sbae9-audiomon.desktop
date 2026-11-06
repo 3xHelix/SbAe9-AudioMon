@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=SbAe9-AudioMon
-Comment=PipeWire VU meters for monitoring signal flow
-Exec=sbae9-audiomon
-Icon=audio-volume-high
-Terminal=false
-Categories=AudioVideo;Audio;Utility;

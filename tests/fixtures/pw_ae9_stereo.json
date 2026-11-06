@@ -1,0 +1,627 @@
+[
+ {
+  "id": 40,
+  "type": "PipeWire:Interface:Metadata",
+  "props": {
+   "metadata.name": "default"
+  },
+  "metadata": [
+   {
+    "subject": 0,
+    "key": "default.audio.sink",
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "alsa_output.pci-0000_06_00.0.analog-stereo"
+    }
+   },
+   {
+    "subject": 0,
+    "key": "default.audio.source",
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "alsa_input.pci-0000_06_00.0.analog-stereo"
+    }
+   }
+  ]
+ },
+ {
+  "id": 48,
+  "type": "PipeWire:Interface:Device",
+  "info": {
+   "state": null,
+   "props": {
+    "alsa.card": 2,
+    "alsa.card_name": "Sound Blaster AE-9",
+    "alsa.driver_name": "snd_hda_codec_creative_ae9",
+    "alsa.id": "AE9",
+    "api.alsa.card": 2,
+    "api.alsa.card.longname": "Creative Labs Sound Blaster AE-9 at 0xfbf04000 irq 44",
+    "api.alsa.card.name": "Sound Blaster AE-9",
+    "device.description": "CA0132 Sound Core3D [Sound Blaster AE-7/AE-9] (Sound Blaster AE-9)",
+    "device.name": "alsa_card.pci-0000_06_00.0",
+    "device.profile-set": "creative-ae9.conf",
+    "media.class": "Audio/Device",
+    "object.id": 48
+   },
+   "params": {
+    "EnumProfile": [
+     {
+      "index": 0,
+      "name": "off",
+      "description": "Off",
+      "priority": 0,
+      "available": "yes",
+      "classes": [
+       0
+      ]
+     },
+     {
+      "index": 1,
+      "name": "output:analog-stereo+input:analog-stereo",
+      "description": "Analog Stereo Duplex",
+      "priority": 6565,
+      "available": "unknown",
+      "classes": [
+       2,
+       [
+        "Audio/Source",
+        1,
+        "card.profile.devices",
+        [
+         0
+        ]
+       ],
+       [
+        "Audio/Sink",
+        1,
+        "card.profile.devices",
+        [
+         1
+        ]
+       ]
+      ]
+     },
+     {
+      "index": 2,
+      "name": "output:analog-stereo",
+      "description": "Analog Stereo Output",
+      "priority": 6500,
+      "available": "unknown",
+      "classes": [
+       1,
+       [
+        "Audio/Sink",
+        1,
+        "card.profile.devices",
+        [
+         1
+        ]
+       ]
+      ]
+     },
+     {
+      "index": 3,
+      "name": "output:analog-surround-51+input:analog-stereo",
+      "description": "Analog Surround 5.1 Output + Analog Stereo Input",
+      "priority": 765,
+      "available": "unknown",
+      "classes": [
+       2,
+       [
+        "Audio/Source",
+        1,
+        "card.profile.devices",
+        [
+         0
+        ]
+       ],
+       [
+        "Audio/Sink",
+        1,
+        "card.profile.devices",
+        [
+         2
+        ]
+       ]
+      ]
+     },
+     {
+      "index": 4,
+      "name": "output:analog-surround-51",
+      "description": "Analog Surround 5.1 Output",
+      "priority": 700,
+      "available": "unknown",
+      "classes": [
+       1,
+       [
+        "Audio/Sink",
+        1,
+        "card.profile.devices",
+        [
+         2
+        ]
+       ]
+      ]
+     },
+     {
+      "index": 5,
+      "name": "input:analog-stereo",
+      "description": "Analog Stereo Input",
+      "priority": 65,
+      "available": "unknown",
+      "classes": [
+       1,
+       [
+        "Audio/Source",
+        1,
+        "card.profile.devices",
+        [
+         0
+        ]
+       ]
+      ]
+     },
+     {
+      "index": 6,
+      "name": "pro-audio",
+      "description": "Pro Audio",
+      "priority": 1,
+      "available": "yes",
+      "classes": [
+       2,
+       [
+        "Audio/Source",
+        1,
+        "card.profile.devices",
+        [
+         4
+        ]
+       ],
+       [
+        "Audio/Sink",
+        1,
+        "card.profile.devices",
+        [
+         3
+        ]
+       ]
+      ]
+     }
+    ],
+    "Profile": [
+     {
+      "index": 1,
+      "name": "output:analog-stereo+input:analog-stereo",
+      "description": "Analog Stereo Duplex",
+      "priority": 6565,
+      "available": "unknown",
+      "classes": [
+       2,
+       [
+        "Audio/Source",
+        1,
+        "card.profile.devices",
+        [
+         0
+        ]
+       ],
+       [
+        "Audio/Sink",
+        1,
+        "card.profile.devices",
+        [
+         1
+        ]
+       ]
+      ],
+      "save": false
+     }
+    ],
+    "Route": [
+     {
+      "index": 0,
+      "direction": "Input",
+      "name": "analog-input",
+      "description": "Analog Input",
+      "priority": 10000,
+      "available": "unknown",
+      "info": [
+       4,
+       "port.type",
+       "analog",
+       "card.profile.port",
+       "0",
+       "route.hw-mute",
+       "true",
+       "route.hw-volume",
+       "true"
+      ],
+      "profiles": [
+       5,
+       1,
+       3
+      ],
+      "device": 0,
+      "props": {
+       "mute": false,
+       "channelVolumes": [
+        1.0,
+        1.0
+       ],
+       "volumeBase": 0.354815,
+       "volumeStep": 1.5e-05,
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "softVolumes": [
+        1.0,
+        1.0
+       ],
+       "latencyOffsetNsec": 0
+      },
+      "devices": [
+       0
+      ],
+      "profile": 1,
+      "save": false
+     },
+     {
+      "index": 1,
+      "direction": "Output",
+      "name": "analog-output",
+      "description": "Analog Output",
+      "priority": 9900,
+      "available": "unknown",
+      "info": [
+       4,
+       "port.type",
+       "analog",
+       "card.profile.port",
+       "1",
+       "route.hw-mute",
+       "true",
+       "route.hw-volume",
+       "true"
+      ],
+      "profiles": [
+       2,
+       1,
+       4,
+       3
+      ],
+      "device": 1,
+      "props": {
+       "mute": false,
+       "channelVolumes": [
+        0.01259,
+        0.01259
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05,
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "softVolumes": [
+        1.0,
+        1.0
+       ],
+       "latencyOffsetNsec": 0
+      },
+      "devices": [
+       1,
+       2
+      ],
+      "profile": 1,
+      "save": false
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": 58,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "running",
+   "props": {
+    "alsa.card": 2,
+    "alsa.card_name": "Sound Blaster AE-9",
+    "alsa.driver_name": "snd_hda_codec_creative_ae9",
+    "alsa.id": "AE9",
+    "api.alsa.card.longname": "Creative Labs Sound Blaster AE-9 at 0xfbf04000 irq 44",
+    "api.alsa.card.name": "Sound Blaster AE-9",
+    "audio.channels": 2,
+    "audio.position": "[ FL, FR ]",
+    "card.profile.device": 1,
+    "device.id": 48,
+    "media.class": "Audio/Sink",
+    "node.description": "CA0132 Sound Core3D [Sound Blaster AE-7/AE-9] (Sound Blaster AE-9) Analog Stereo",
+    "node.name": "alsa_output.pci-0000_06_00.0.analog-stereo",
+    "object.id": 58
+   },
+   "params": {
+    "Props": [
+     {
+      "volume": 1.0,
+      "mute": false,
+      "channelVolumes": [
+       0.01259,
+       0.01259
+      ],
+      "channelMap": [
+       "FL",
+       "FR"
+      ],
+      "softMute": false,
+      "softVolumes": [
+       1.0,
+       1.0
+      ],
+      "monitorMute": false,
+      "monitorVolumes": [
+       1.0,
+       1.0
+      ],
+      "params": [
+       "monitor.channel-volumes",
+       false,
+       "channelmix.disable",
+       false,
+       "channelmix.min-volume",
+       0.0,
+       "channelmix.max-volume",
+       10.0,
+       "channelmix.normalize",
+       false,
+       "channelmix.mix-lfe",
+       true,
+       "channelmix.upmix",
+       true,
+       "channelmix.lfe-cutoff",
+       0.0,
+       "channelmix.fc-cutoff",
+       0.0,
+       "channelmix.rear-delay",
+       0.0,
+       "channelmix.stereo-widen",
+       0.0,
+       "channelmix.hilbert-taps",
+       0,
+       "channelmix.upmix-method",
+       "none",
+       "resample.quality",
+       4,
+       "resample.disable",
+       false,
+       "dither.noise",
+       0,
+       "dither.method",
+       "none",
+       "debug.wav-path",
+       "",
+       "channelmix.lock-volumes",
+       false,
+       "audioconvert.filter-graph.disable",
+       false,
+       "audioconvert.filter-graph",
+       ""
+      ]
+     },
+     {
+      "device": "hw:2,0",
+      "deviceName": "",
+      "cardName": "",
+      "latencyOffsetNsec": 0,
+      "params": [
+       "audio.channels",
+       2,
+       "audio.rate",
+       0,
+       "audio.format",
+       "UNKNOWN",
+       "audio.position",
+       "[ FL, FR ]",
+       "audio.allowed-rates",
+       "[ ]",
+       "api.alsa.period-size",
+       0,
+       "api.alsa.period-num",
+       0,
+       "api.alsa.headroom",
+       0,
+       "api.alsa.start-delay",
+       0,
+       "api.alsa.disable-mmap",
+       false,
+       "api.alsa.disable-batch",
+       false,
+       "api.alsa.disable-tsched",
+       false,
+       "api.alsa.use-chmap",
+       false,
+       "api.alsa.multi-rate",
+       true,
+       "api.alsa.htimestamp",
+       false,
+       "api.alsa.htimestamp.max-errors",
+       64,
+       "latency.internal.rate",
+       0,
+       "latency.internal.ns",
+       0,
+       "clock.name",
+       "api.alsa.p-2"
+      ]
+     }
+    ],
+    "Format": [
+     {
+      "mediaType": "audio",
+      "mediaSubtype": "raw",
+      "format": "S32LE",
+      "rate": 96000,
+      "channels": 2,
+      "position": [
+       "FL",
+       "FR"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": 59,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "running",
+   "props": {
+    "alsa.card": 2,
+    "alsa.card_name": "Sound Blaster AE-9",
+    "alsa.driver_name": "snd_hda_codec_creative_ae9",
+    "alsa.id": "AE9",
+    "api.alsa.card.longname": "Creative Labs Sound Blaster AE-9 at 0xfbf04000 irq 44",
+    "api.alsa.card.name": "Sound Blaster AE-9",
+    "audio.channels": 2,
+    "audio.position": "[ FL, FR ]",
+    "card.profile.device": 0,
+    "device.id": 48,
+    "media.class": "Audio/Source",
+    "node.description": "CA0132 Sound Core3D [Sound Blaster AE-7/AE-9] (Sound Blaster AE-9) Analog Stereo",
+    "node.name": "alsa_input.pci-0000_06_00.0.analog-stereo",
+    "object.id": 59
+   },
+   "params": {
+    "Props": [
+     {
+      "volume": 1.0,
+      "mute": false,
+      "channelVolumes": [
+       1.0,
+       1.0
+      ],
+      "channelMap": [
+       "FL",
+       "FR"
+      ],
+      "softMute": false,
+      "softVolumes": [
+       1.0,
+       1.0
+      ],
+      "monitorMute": false,
+      "monitorVolumes": [
+       1.0,
+       1.0
+      ],
+      "params": [
+       "monitor.channel-volumes",
+       false,
+       "channelmix.disable",
+       false,
+       "channelmix.min-volume",
+       0.0,
+       "channelmix.max-volume",
+       10.0,
+       "channelmix.normalize",
+       false,
+       "channelmix.mix-lfe",
+       true,
+       "channelmix.upmix",
+       true,
+       "channelmix.lfe-cutoff",
+       0.0,
+       "channelmix.fc-cutoff",
+       0.0,
+       "channelmix.rear-delay",
+       0.0,
+       "channelmix.stereo-widen",
+       0.0,
+       "channelmix.hilbert-taps",
+       0,
+       "channelmix.upmix-method",
+       "none",
+       "resample.quality",
+       4,
+       "resample.disable",
+       false,
+       "dither.noise",
+       0,
+       "dither.method",
+       "none",
+       "debug.wav-path",
+       "",
+       "channelmix.lock-volumes",
+       false,
+       "audioconvert.filter-graph.disable",
+       false,
+       "audioconvert.filter-graph",
+       ""
+      ]
+     },
+     {
+      "device": "hw:2,0",
+      "deviceName": "",
+      "cardName": "",
+      "latencyOffsetNsec": 0,
+      "params": [
+       "audio.channels",
+       2,
+       "audio.rate",
+       0,
+       "audio.format",
+       "UNKNOWN",
+       "audio.position",
+       "[ FL, FR ]",
+       "audio.allowed-rates",
+       "[ ]",
+       "api.alsa.period-size",
+       0,
+       "api.alsa.period-num",
+       0,
+       "api.alsa.headroom",
+       0,
+       "api.alsa.start-delay",
+       0,
+       "api.alsa.disable-mmap",
+       false,
+       "api.alsa.disable-batch",
+       false,
+       "api.alsa.disable-tsched",
+       false,
+       "api.alsa.use-chmap",
+       false,
+       "api.alsa.multi-rate",
+       true,
+       "api.alsa.htimestamp",
+       false,
+       "api.alsa.htimestamp.max-errors",
+       64,
+       "latency.internal.rate",
+       0,
+       "latency.internal.ns",
+       0,
+       "clock.name",
+       "api.alsa.c-2"
+      ]
+     }
+    ],
+    "Format": [
+     {
+      "mediaType": "audio",
+      "mediaSubtype": "raw",
+      "format": "S32LE",
+      "rate": 48000,
+      "channels": 2,
+      "position": [
+       "FL",
+       "FR"
+      ]
+     }
+    ]
+   }
+  }
+ }
+]

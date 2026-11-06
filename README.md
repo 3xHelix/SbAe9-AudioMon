@@ -1,7 +1,26 @@
 # SbAe9-AudioMon
 
 Lightweight PipeWire VU meters (Qt 6 / PySide6), with a debug mode for the
-Sound Blaster AE-9.
+Sound Blaster AE-9. Styled to match SbAe9-SBC (Sound Blaster Command for
+Linux) in its Helix palette.
+
+## Window
+
+- **Title bar:** the app draws its own, like Sound Blaster Command. Drag it to
+  move the window and double-click to maximize. Use Settings, or `--frame`, to
+  get the desktop's title bar back.
+- **Pages (sidebar):**
+  - **Monitor:** the AE-9 meters, app streams and recent events.
+  - **Event Log:** the full debug log, with a button to open the log file.
+  - **Manual Meters:** two meters you wire by hand.
+  - **Settings:** monitoring options, the title bar choice, and driver/log/config info.
+- **Bottom bar:**
+  - a status dot: green = running, amber = idle, grey = suspended, red = SILENT or card missing;
+  - the AE-9 sink state;
+  - on the Monitor page, quick toggles for the three Settings → Monitoring options
+    (Auto-wire, Let idle, Always capture), kept in sync with Settings;
+  - the **SILENT** badge;
+  - the dropout count.
 
 ## Modes
 
@@ -59,12 +78,15 @@ the bottom of the window. Times are local, to the second, to line up with
 SILENT lines and card (re)appearances include the driver version and srcversion
 from `/sys/module/snd_hda_codec_creative_ae9/`.
 
-### Manual mode
+### Manual meters
 
-Untick **Auto-wire AE-9** (or run `--manual`) to get the original two meters,
+The **Manual Meters** page (`--manual` opens on it) has the original two meters,
 **AudioMon In** (`sbae9-audiomon.in`) and **AudioMon Out** (`sbae9-audiomon.out`). Each
 has 2/4/6/8 unlinked input ports to wire up yourself with Helvum, qpwgraph or
-`pw-link`. Changing the channel count recreates that node, so its links are dropped.
+`pw-link`. Their nodes are created the first time you open the page, and they
+run alongside the AE-9 monitor. Changing the channel count recreates that node,
+so its links are dropped. To stop the AE-9 monitoring, untick **Auto-wire AE-9**
+in Settings.
 
 ## Requirements
 
@@ -76,13 +98,56 @@ On Fedora: `sudo dnf install python3-pyside6 python3-numpy pipewire-utils`
     ./sbae9-audiomon.py                  # last-used mode (AE-9 mode the first time)
     ./sbae9-audiomon.py --ae9            # AE-9 mode
     ./sbae9-audiomon.py --ae9 --keep-awake
-    ./sbae9-audiomon.py --manual -c 8    # two 8-channel meters, wire by hand
+    ./sbae9-audiomon.py --manual -c 8    # open on Manual Meters, two 8-channel meters
+    ./sbae9-audiomon.py --frame          # use the desktop's title bar
     ./sbae9-audiomon.py --log /path/to/file.log
 
-Install for your user:
+Install for your user (the `sbae9-audiomon` command, its icon and a menu entry):
 
-    install -Dm755 sbae9-audiomon.py ~/.local/bin/sbae9-audiomon
-    install -Dm644 sbae9-audiomon.desktop ~/.local/share/applications/sbae9-audiomon.desktop
+    ./install.sh
+
+It copies the app to `~/.local/bin`, so re-run it after changing the app.
+
+The icon comes from `Neon VU Meter Diagnostics.png`. `tools/make_icons.py`,
+adapted from SbAe9-SBC's, cuts the rounded tile out of the artwork and writes
+`appicon/sbae9-audiomon-<size>.png` (16-512 px):
+
+    python3 tools/make_icons.py "Neon VU Meter Diagnostics.png"
+
+## Testing without the card: the fake AE-9
+
+`tests/fakeae9.py` is a fake AE-9 test rig, built like SbAe9-SBC's. It starts
+from SBC's snapshot of the real machine (`tests/fixtures/pw_ae9_stereo.json`,
+copied from SbAe9-SBC) and fakes the PipeWire graph, the meters (`pw-record`)
+and `pw-link`:
+- The sink runs while an app plays to it, goes idle when nothing does, then suspends.
+- What U Hear follows the output 3.1 dB lower, or goes silent to fake the bug.
+- Optical In delivers nothing without light on the jack.
+- The card can drop off and come back.
+
+Nothing real is touched: no PipeWire, no card, no `~/.config`, and the debug
+log goes to a temp folder.
+
+    python3 -m unittest discover -s tests     # automated tests, ~15 s
+    python3 tools/fake_ae9.py                 # the real window on the fake card, looping a scenario
+    python3 tools/fake_ae9.py --list          # what the scenario does
+
+The tests cover:
+- finding the card;
+- letting it suspend;
+- passive meters;
+- wiring inputs only while it runs;
+- app streams starting and ending;
+- SILENT start and end, with the driver version in the log;
+- the card dropping off and coming back;
+- Optical "no signal";
+- keep-awake and always-capture modes;
+- an older driver with no What U Hear;
+- that every link goes only into our own meters, and that hand-made links are left alone;
+- the bottom-bar toggles staying in step with Settings.
+
+The scenario plays music, lets the card idle and suspend, fakes a silent
+restart (SILENT), drops the card and brings it back, then lights up Optical In.
 
 ## Reading the meters
 
@@ -102,6 +167,9 @@ Saved to `~/.config/sbae9-audiomon/config.json`:
 {
   "mode": "ae9",
   "let_idle": true,
+  "always_capture": false,
+  "frameless": true,
+  "page": 0,
   "meters": [
     {"name": "sbae9-audiomon.in",  "label": "AudioMon In",  "channels": 2},
     {"name": "sbae9-audiomon.out", "label": "AudioMon Out", "channels": 2}

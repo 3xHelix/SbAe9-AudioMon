@@ -27,14 +27,19 @@ import sys
 import threading
 import time
 from datetime import datetime
+from functools import lru_cache
 from types import SimpleNamespace
 
 import numpy as np
-from PySide6.QtCore import QRectF, QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFontDatabase, QIcon, QPainter, QPen
+from PySide6.QtCore import QByteArray, QPointF, QRectF, QSignalBlocker, QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import (
+    QColor, QDesktopServices, QFont, QFontDatabase, QIcon, QPainter, QPen, QPixmap,
+)
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit,
-    QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QPushButton, QRadioButton, QScrollArea, QSizePolicy, QStackedWidget, QToolButton,
+    QVBoxLayout, QWidget,
 )
 
 RATE = 48000
@@ -71,6 +76,8 @@ DEFAULT_CONFIG = {
     "mode": "ae9",        # "ae9" or "manual"
     "let_idle": True,     # AE-9 mode: don't keep the card awake
     "always_capture": False,  # AE-9 mode + let_idle: keep What U Hear/Mic/Optical wired anyway
+    "frameless": True,    # draw our own title bar, like Sound Blaster Command
+    "page": 0,            # last page shown
     "meters": [
         {"name": "sbae9-audiomon.in", "label": "AudioMon In", "channels": 2},
         {"name": "sbae9-audiomon.out", "label": "AudioMon Out", "channels": 2},
@@ -155,9 +162,11 @@ def load_config():
             cfg["meters"][i].update({k: v for k, v in m.items() if k in ("name", "label", "channels")})
         if user.get("mode") in ("ae9", "manual"):
             cfg["mode"] = user["mode"]
-        for k in ("let_idle", "always_capture"):
+        for k in ("let_idle", "always_capture", "frameless"):
             if isinstance(user.get(k), bool):
                 cfg[k] = user[k]
+        if isinstance(user.get("page"), int):
+            cfg["page"] = user["page"]
     except (OSError, ValueError):
         pass
     for m in cfg["meters"]:
@@ -464,7 +473,7 @@ class EventLog:
 
     def __init__(self, path):
         self.path = path
-        self.view = None
+        self.views = []
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             self.file = open(path, "a", buffering=1)
@@ -477,8 +486,28 @@ class EventLog:
         if self.file:
             self.file.write(line + "\n")
         print(line, flush=True)
-        if self.view is not None:
-            self.view.appendPlainText(line)
+        for v in self.views:
+            bar = v.verticalScrollBar()
+            follow = bar.value() >= bar.maximum() - 4   # keep following the newest line
+            v.appendPlainText(line)
+            if follow:
+                bar.setValue(bar.maximum())
+
+    def add_view(self, view, backfill=False):
+        """Show new lines in `view`; backfill=True first loads the file's tail."""
+        if backfill:
+            try:
+                with open(self.path, errors="replace") as f:
+                    tail = f.readlines()[-500:]
+                view.setPlainText("".join(tail).rstrip("\n"))
+                view.moveCursor(view.textCursor().MoveOperation.End)
+            except OSError:
+                pass
+        self.views.append(view)
+
+    def remove_view(self, view):
+        if view in self.views:
+            self.views.remove(view)
 
 
 # --------------------------------------------------------------------------
@@ -534,6 +563,225 @@ class MeterState:
 
 
 # --------------------------------------------------------------------------
+# Theme: the "Helix" palette and styling of SbAe9-SBC (Sound Blaster Command
+# for Linux), so the two apps look like a set.
+# --------------------------------------------------------------------------
+
+class T:
+    ACCENT, ACCENT_HI, ACCENT_TEXT = "#f57a45", "#ffb63a", "#1b1230"
+    TEXT, MUTED, DIM = "#f2edff", "#ab9fcb", "#6d6190"
+    TRACK, PANEL, PANEL_HI, PANEL_LO = "#3a2f5a", "#3b2e5e", "#4b3b74", "#2e2449"
+    TITLE_BG, BOTTOM_BG = "#120f21", "#110e1f"
+    SIDEBAR_TOP, SIDEBAR_BOTTOM = "#2a1850", "#3a1452"
+    MAIN_TOP, MAIN_BOTTOM = "#1d1832", "#26183f"
+    POPUP, POPUP_BORDER, LIST_BG, TOOLTIP = "#16122a", "#3b2f5c", "#211b38", "#2a2145"
+    IDLE = "#7a6c9e"
+    GRAPH_BG, GRAPH_TEXT = "#241d3d", "#d9d0f0"
+    OK, WARN, DANGER = "#5dcaa8", "#ffb63a", "#e2505c"
+    METER = ("#5dcaa8", "#ffb63a", "#e31b49")   # green / yellow / red zones
+    OVERLAY, SHADE, HANDLE = "#ffffff", "#000000", "#f2f2f6"
+
+
+FONT_FAMILIES = ["Roboto Condensed", "Barlow Semi Condensed", "Noto Sans", "DejaVu Sans Condensed"]
+
+
+def rgba(hex_color, alpha):
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def qcolor(hex_color, alpha=1.0):
+    c = QColor(hex_color)
+    c.setAlphaF(alpha)
+    return c
+
+
+def mono_font(px):
+    f = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    f.setPixelSize(px)
+    return f
+
+
+def ui_font(px, bold=False):
+    f = QFont()
+    f.setFamilies(FONT_FAMILIES)
+    f.setPixelSize(px)
+    f.setBold(bold)
+    return f
+
+
+_S = 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
+ICONS = {
+    "wave": f'<path {_S} d="M2 12h2l2-6 3 12 3-15 3 15 3-12 2 6h2"/>',
+    "log": f'<path {_S} d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor"/>'
+           f'<circle cx="3.5" cy="12" r="1.2" fill="currentColor"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor"/>',
+    "mixer": f'<path {_S} d="M3 6h18M3 12h18M3 18h18"/><circle {_S} cx="15" cy="12" r="2"/>'
+             f'<circle {_S} cx="10" cy="18" r="2"/><circle {_S} cx="8" cy="6" r="2"/>',
+    "settings": f'<circle {_S} cx="12" cy="12" r="3"/><path {_S} d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    "refresh": f'<path {_S} d="M20 11a8 8 0 1 0-2.3 5.7"/><path {_S} d="M20 4v7h-7"/>',
+    "folder": f'<path {_S} d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    "minimize": f'<path {_S} d="M6 12.5h12"/>',
+    "maximize": f'<rect {_S} x="6" y="6" width="12" height="12" rx="1.5"/>',
+    "close": f'<path {_S} d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    "chevron-down": f'<path {_S} d="M5 9l7 7 7-7"/>',
+    "check": f'<path {_S} d="M5 12.5l4.5 4.5L19 7.5"/>',
+}
+
+
+@lru_cache(maxsize=256)
+def icon_pixmap(name, color, size=22, ratio=2.0):
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+           + ICONS[name].replace("currentColor", color) + "</svg>")
+    r = QSvgRenderer(QByteArray(svg.encode()))
+    px = QPixmap(int(size * ratio), int(size * ratio))
+    px.fill(Qt.GlobalColor.transparent)
+    p = QPainter(px)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    r.render(p, QRectF(0, 0, px.width(), px.height()))
+    p.end()
+    px.setDevicePixelRatio(ratio)
+    return px
+
+
+def make_icon(name, color=None, active=None, size=22):
+    color = color or T.TEXT
+    ic = QIcon()
+    ic.addPixmap(icon_pixmap(name, color, size), QIcon.Mode.Normal, QIcon.State.Off)
+    ic.addPixmap(icon_pixmap(name, active or color, size), QIcon.Mode.Normal, QIcon.State.On)
+    ic.addPixmap(icon_pixmap(name, active or color, size), QIcon.Mode.Active, QIcon.State.Off)
+    ic.addPixmap(icon_pixmap(name, T.DIM, size), QIcon.Mode.Disabled, QIcon.State.Off)
+    return ic
+
+
+def app_icon():
+    """The app icon: from the icon theme (install.sh puts it there), else the
+    PNGs installed or next to this file, else a drawn one."""
+    ic = QIcon.fromTheme("sbae9-audiomon")
+    if not ic.isNull():
+        return ic
+    ic = QIcon()
+    here = os.path.dirname(os.path.abspath(__file__))
+    hicolor = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
+                           "icons", "hicolor")
+    for size in (16, 24, 32, 48, 64, 128, 256, 512):
+        for path in (os.path.join(hicolor, f"{size}x{size}", "apps", "sbae9-audiomon.png"),
+                     os.path.join(here, "appicon", f"sbae9-audiomon-{size}.png")):
+            if os.path.exists(path):
+                ic.addFile(path, QSize(size, size))
+                break
+    return ic if not ic.isNull() else QIcon(icon_pixmap("wave", T.ACCENT_HI, 64))
+
+
+def stylesheet():
+    cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+                         "sbae9-audiomon")
+    os.makedirs(cache, exist_ok=True)
+    img = {}
+    for name, color in (("chevron-down", T.TEXT), ("check", T.ACCENT_TEXT)):
+        path = os.path.join(cache, f"qss-{name}-{color.lstrip('#')}.png")
+        if not os.path.exists(path):
+            icon_pixmap(name, color, 16, 2.0).save(path)
+        img[name] = path
+    fams = ", ".join(f'"{f}"' for f in FONT_FAMILIES)
+    return f"""
+* {{ font-family: {fams}, sans-serif; color: {T.TEXT}; font-size: 14px; }}
+#root {{ background: {T.MAIN_TOP}; }}
+#titleBar {{ background: {T.TITLE_BG}; }}
+#winButton, #winClose {{ background: transparent; border: none; border-radius: 3px; }}
+#winButton:hover {{ background: {rgba(T.OVERLAY, 0.10)}; }}
+#winClose:hover {{ background: {T.DANGER}; }}
+#appTitle {{ font-size: 16px; color: {T.TEXT}; }}
+#deviceName {{ font-size: 17px; font-weight: 700; color: {T.ACCENT}; }}
+#sidebar {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {T.SIDEBAR_TOP}, stop:1 {T.SIDEBAR_BOTTOM});
+}}
+#sidebar QPushButton {{
+    background: transparent; border: none; border-left: 3px solid transparent; border-radius: 0;
+    text-align: left; padding: 11px 16px; font-size: 16px;
+}}
+#sidebar QPushButton:hover {{ background: {rgba(T.OVERLAY, 0.06)}; }}
+#sidebar QPushButton:checked {{
+    color: {T.ACCENT_HI}; border-left: 3px solid {T.ACCENT}; background: {rgba(T.OVERLAY, 0.06)};
+}}
+#sideCaption {{ color: {T.MUTED}; font-size: 13px; padding-left: 18px; }}
+#sep {{ background: {rgba(T.OVERLAY, 0.13)}; max-height: 1px; min-height: 1px; margin: 4px 10px; }}
+#content {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {T.MAIN_TOP}, stop:1 {T.MAIN_BOTTOM});
+}}
+#bottomBar {{ background: {T.BOTTOM_BG}; }}
+#pageTitle {{ font-size: 23px; font-weight: 700; }}
+#sectionTitle {{ font-size: 15px; font-weight: 700; }}
+#cardTitle {{ font-size: 15px; font-weight: 700; }}
+#muted, #hint {{ color: {T.MUTED}; font-size: 13px; }}
+#bigValue {{ font-size: 15px; font-weight: 700; }}
+#profileLabel {{ font-size: 20px; font-weight: 600; }}
+#logo {{ font-size: 26px; font-weight: 900; font-style: italic; color: {T.TEXT}; letter-spacing: 1px; }}
+#silentBadge {{
+    background: {T.DANGER}; color: #ffffff; font-size: 15px; font-weight: 800; letter-spacing: 1px;
+    padding: 3px 12px; border-radius: 4px;
+}}
+#banner {{ background: {rgba(T.ACCENT, 0.16)}; border: 1px solid {rgba(T.ACCENT, 0.55)}; border-radius: 4px; }}
+#card {{ background: {rgba(T.SHADE, 0.10)}; border-radius: 6px; }}
+QToolTip {{ background: {T.TOOLTIP}; color: {T.TEXT}; border: 1px solid {T.POPUP_BORDER}; padding: 4px; }}
+QPushButton {{ background: {T.PANEL}; border: none; padding: 7px 18px; border-radius: 2px; }}
+QPushButton:hover {{ background: {T.PANEL_HI}; }}
+QPushButton:pressed {{ background: {T.PANEL_LO}; }}
+QToolButton {{ background: transparent; border: none; padding: 4px; border-radius: 3px; }}
+QToolButton:hover {{ background: {rgba(T.OVERLAY, 0.08)}; }}
+QComboBox {{
+    background: {T.PANEL}; border: none; padding: 5px 10px; border-radius: 2px; min-height: 20px;
+    font-size: 14px; font-weight: 600;
+}}
+QComboBox:hover {{ background: {T.PANEL_HI}; }}
+QComboBox::drop-down {{ border: none; width: 28px; }}
+QComboBox::down-arrow {{ image: url({img["chevron-down"]}); width: 14px; height: 14px; }}
+QComboBox QAbstractItemView {{
+    background: {T.LIST_BG}; border: 1px solid {T.POPUP_BORDER}; selection-background-color: {T.ACCENT};
+    selection-color: {T.ACCENT_TEXT}; outline: none; padding: 4px;
+}}
+QCheckBox {{ spacing: 10px; font-size: 15px; }}
+QCheckBox:disabled {{ color: {T.DIM}; }}
+QCheckBox::indicator {{ width: 16px; height: 16px; border: 2px solid {T.TEXT}; border-radius: 2px; }}
+QCheckBox::indicator:disabled {{ border-color: {T.DIM}; }}
+QCheckBox::indicator:checked {{ background: {T.ACCENT}; border-color: {T.ACCENT}; image: url({img["check"]}); }}
+#quickToggle {{ spacing: 7px; font-size: 13px; color: {T.MUTED}; }}
+#quickToggle:checked {{ color: {T.TEXT}; }}
+#quickToggle:disabled {{ color: {T.DIM}; }}
+#quickToggle::indicator {{
+    width: 12px; height: 12px; border-radius: 8px; border: 2px solid {T.MUTED}; background: transparent;
+}}
+#quickToggle::indicator:checked {{
+    border: 2px solid {T.ACCENT}; background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 {T.ACCENT}, stop:0.55 {T.ACCENT}, stop:0.6 transparent);
+}}
+#quickToggle::indicator:disabled {{ border-color: {T.DIM}; }}
+QPlainTextEdit {{
+    background: {rgba(T.SHADE, 0.18)}; border: none; border-radius: 6px; padding: 6px;
+    color: {T.GRAPH_TEXT}; selection-background-color: {T.ACCENT}; selection-color: {T.ACCENT_TEXT};
+}}
+QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
+QScrollBar:vertical, QScrollBar:horizontal {{ background: transparent; width: 10px; height: 10px; }}
+QScrollBar::handle {{ background: {rgba(T.OVERLAY, 0.18)}; border-radius: 4px; min-height: 30px; min-width: 30px; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
+QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+"""
+
+
+def label(text, name=None, wrap=False):
+    lbl = QLabel(text)
+    if name:
+        lbl.setObjectName(name)
+    lbl.setWordWrap(wrap)
+    return lbl
+
+
+def hline():
+    sep = QFrame()
+    sep.setObjectName("sep")
+    return sep
+
+
+# --------------------------------------------------------------------------
 # Meter geometry + drawing
 # --------------------------------------------------------------------------
 
@@ -542,26 +790,16 @@ COL_W = 50
 PAIR_GAP = 14
 PAD = 8
 TOP = 32
-ROW_H = 14
+ROW_H = 15
 STAT_ROWS = ("Peak", "RMS", "Avg", "Max")
 STATS_H = len(STAT_ROWS) * ROW_H + 10
 TICKS = (0, -3, -6, -10, -18, -30, -40, -50, -60)
 COL_MAX = 120   # widest a column gets when the window is stretched
-BAR_MAX = 64    # widest a bar gets
-
-BG = QColor.fromRgbF(0.08, 0.085, 0.10)
-BG_ALERT = QColor.fromRgbF(0.22, 0.06, 0.07)
-BAR_BG = QColor.fromRgbF(0.13, 0.14, 0.16)
-TEXT = QColor.fromRgbF(0.85, 0.87, 0.90)
-TEXT_DIM = QColor.fromRgbF(0.55, 0.57, 0.60)
-CLIP_ON = QColor.fromRgbF(0.95, 0.15, 0.15)
-CLIP_OFF = QColor.fromRgbF(0.22, 0.10, 0.10)
-CLIP_TEXT = QColor.fromRgbF(0.95, 0.35, 0.30)
-HOLD = QColor.fromRgbF(0.95, 0.95, 0.95)
+BAR_MAX = 60    # widest a bar gets
 ZONES = (
-    (FLOOR_DB, GREEN_MAX, QColor.fromRgbF(0.18, 0.80, 0.35)),
-    (GREEN_MAX, YELLOW_MAX, QColor.fromRgbF(0.95, 0.80, 0.15)),
-    (YELLOW_MAX, 0.0, QColor.fromRgbF(0.95, 0.25, 0.20)),
+    (FLOOR_DB, GREEN_MAX, 0),
+    (GREEN_MAX, YELLOW_MAX, 1),
+    (YELLOW_MAX, 0.0, 2),
 )
 
 
@@ -600,12 +838,6 @@ def col_x(i, cw=COL_W):
     return SCALE_W + PAD + i * cw + (i // 2) * PAIR_GAP
 
 
-def mono_font(px):
-    f = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-    f.setPixelSize(px)
-    return f
-
-
 class MeterWidget(QWidget):
     """Draws one meter: scale, bars, clip LEDs and the stats rows."""
 
@@ -614,10 +846,13 @@ class MeterWidget(QWidget):
         self.panel = panel
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setToolTip("Click to reset stats")
-        self.fonts = {px: mono_font(px) for px in (9, 10, 11)}
+        self.f_tick = ui_font(10)
+        self.f_name = ui_font(12, bold=True)
+        self.f_val = ui_font(12)
+        self.f_row = ui_font(11)
 
     def sizeHint(self):
-        return QSize(panel_width(self.panel.state.channels), 340)
+        return QSize(panel_width(self.panel.state.channels), 330)
 
     def minimumSizeHint(self):
         return QSize(panel_width(self.panel.state.channels), 220)
@@ -629,7 +864,13 @@ class MeterWidget(QWidget):
         st = self.panel.state
         w, h = self.width(), self.height()
         p = QPainter(self)
-        p.fillRect(0, 0, w, h, BG_ALERT if self.panel.alert else BG)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(qcolor(T.GRAPH_BG))
+        p.drawRoundedRect(QRectF(0, 0, w, h), 6, 6)
+        if self.panel.alert:
+            p.setBrush(qcolor(T.DANGER, 0.22))
+            p.drawRoundedRect(QRectF(0, 0, w, h), 6, 6)
 
         bar_top = TOP
         bar_bot = h - STATS_H - 4
@@ -638,11 +879,11 @@ class MeterWidget(QWidget):
         def y_of(db):
             return bar_bot - iec_scale(db) * bar_h
 
-        def text(s, x, y, align="left", px=10, color=TEXT):
+        def text(s, x, y, align="left", font=None, color=T.GRAPH_TEXT):
             # (x, y) is the baseline anchor
-            p.setFont(self.fonts[px])
-            p.setPen(color)
-            box = QRectF(x - 200, y - px - 2, 400, px + 6)
+            p.setFont(font or self.f_val)
+            p.setPen(QColor(color))
+            box = QRectF(x - 200, y - 16, 400, 20)
             if align == "left":
                 box.moveLeft(x)
                 flags = Qt.AlignmentFlag.AlignLeft
@@ -653,73 +894,76 @@ class MeterWidget(QWidget):
                 flags = Qt.AlignmentFlag.AlignHCenter
             p.drawText(box, flags | Qt.AlignmentFlag.AlignBottom, s)
 
-        # Scale + grid
+        # Scale + grid; centre the whole meter when the card is wider than it
         cw = col_width(st.channels, w)
         right = col_x(st.channels - 1, cw) + cw
+        p.translate(max(0.0, (w - right - PAD) / 2), 0)
+        last_label_y = -100
         for t in TICKS:
             y = round(y_of(t)) + 0.5
-            text(f"{t}", SCALE_W - 4, y + 4, "right", 9, TEXT_DIM)
-            grid = QColor(255, 255, 255, 41 if t in (0, -18) else 18)
-            p.setPen(QPen(grid, 1))
-            p.drawLine(SCALE_W, int(y), int(right), int(y))
+            if y - last_label_y >= 12:   # skip labels that would overlap
+                text(f"{t}", SCALE_W - 4, y + 5, "right", self.f_tick, T.MUTED)
+                last_label_y = y
+            p.setPen(QPen(qcolor(T.OVERLAY, 0.16 if t in (0, -18) else 0.07), 1))
+            p.drawLine(QPointF(SCALE_W, y), QPointF(right, y))
 
         rms_db = st.rms_db
         avg_db = st.avg_db
         max_db = amp_db(st.max_amp)
-        p.setPen(Qt.PenStyle.NoPen)
         for i in range(st.channels):
             x0 = col_x(i, cw)
             cx = x0 + cw / 2
             bw = min(cw - 16, BAR_MAX)
             bx = cx - bw / 2
 
-            text(st.names[i], cx, 14, "center", 11, TEXT)
+            text(st.names[i], cx, 15, "center", self.f_name, T.TEXT)
 
+            p.setPen(Qt.PenStyle.NoPen)
             # Clip LED (latched until reset)
-            p.fillRect(QRectF(bx, 19, bw, 7), CLIP_ON if st.clipped[i] else CLIP_OFF)
+            p.setBrush(qcolor(T.DANGER) if st.clipped[i] else qcolor(T.DANGER, 0.16))
+            p.drawRoundedRect(QRectF(bx, 19, bw, 6), 2, 2)
 
             # Bar background
-            p.fillRect(QRectF(bx, bar_top, bw, bar_h), BAR_BG)
+            p.setBrush(qcolor(T.TRACK))
+            p.drawRoundedRect(QRectF(bx, bar_top, bw, bar_h), 2, 2)
 
             def fill_level(level, alpha):
-                for lo, hi, color in ZONES:
+                for lo, hi, zone in ZONES:
                     if level <= lo:
                         break
                     top = y_of(min(level, hi))
-                    c = QColor(color)
-                    c.setAlphaF(alpha)
-                    p.fillRect(QRectF(bx, top, bw, y_of(lo) - top), c)
+                    p.fillRect(QRectF(bx, top, bw, y_of(lo) - top), qcolor(T.METER[zone], alpha))
 
             fill_level(st.peak_db[i], 0.35)  # peak: translucent
             fill_level(rms_db[i], 1.0)       # VU/RMS: solid
 
             if st.hold_db[i] > FLOOR_DB + 0.5:
                 y = round(y_of(st.hold_db[i]))
-                p.fillRect(QRectF(bx, y - 1, bw, 2), HOLD)
+                p.fillRect(QRectF(bx, y - 1, bw, 2), qcolor(T.HANDLE))
 
             # Stats
             vals = (st.hold_db[i], rms_db[i], avg_db[i], max_db[i])
             for r, v in enumerate(vals):
-                y = bar_bot + 16 + r * ROW_H
-                color = CLIP_TEXT if (r == 3 and st.clipped[i]) else TEXT
-                text(fmt_db(v), cx, y, "center", 10, color)
+                y = bar_bot + 17 + r * ROW_H
+                color = T.DANGER if (r == 3 and st.clipped[i]) else T.GRAPH_TEXT
+                text(fmt_db(v), cx, y, "center", self.f_val, color)
 
         for r, name in enumerate(STAT_ROWS):
-            text(name, 4, bar_bot + 16 + r * ROW_H, "left", 9, TEXT_DIM)
-
+            text(name, 6, bar_bot + 17 + r * ROW_H, "left", self.f_row, T.MUTED)
         p.end()
 
 
 # --------------------------------------------------------------------------
-# UI
+# Meter panels and views
 # --------------------------------------------------------------------------
 
-class MeterPanel(QWidget):
-    """Header (title, status, optional channel picker, reset) + meter."""
+class MeterPanel(QFrame):
+    """A card: header (title, status, optional channel picker, reset) + meter."""
 
     def __init__(self, title, node_name, channels, subtitle=None, passive=False,
                  on_channels=None, fit=None, tooltip=None):
         super().__init__()
+        self.setObjectName("card")
         self.title_text = title
         self.node_name = node_name
         self.passive = passive
@@ -733,17 +977,20 @@ class MeterPanel(QWidget):
         self._status_html = None
 
         sub = subtitle if subtitle is not None else node_name
-        title_lbl = QLabel(f"<b>{html_escape(elide(title))}</b><br>"
-                           f"<small><tt>{html_escape(elide(sub, 34))}</tt></small>")
-        title_lbl.setTextFormat(Qt.TextFormat.RichText)
-        title_lbl.setToolTip(tooltip or f"{title}\n{sub}\nmeter node: {node_name}")
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        titles.addWidget(label(elide(title), "cardTitle"))
+        titles.addWidget(label(elide(sub, 34), "muted"))
+        tip = tooltip or f"{title}\n{sub}\nmeter node: {node_name}"
+        for i in range(titles.count()):
+            titles.itemAt(i).widget().setToolTip(tip)
 
         self.status = QLabel()
         self.status.setTextFormat(Qt.TextFormat.RichText)
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        header.addWidget(title_lbl, 1)
+        header.addLayout(titles, 1)
         header.addWidget(self.status)
 
         if on_channels:
@@ -755,25 +1002,24 @@ class MeterPanel(QWidget):
             header.addWidget(self.combo)
 
         reset = QToolButton()
-        icon = QIcon.fromTheme("view-refresh")
-        if icon.isNull():
-            reset.setText("⟳")
-        else:
-            reset.setIcon(icon)
+        reset.setIcon(make_icon("refresh", T.MUTED, active=T.TEXT, size=18))
+        reset.setIconSize(QSize(18, 18))
         reset.setToolTip("Reset stats and clip")
         reset.clicked.connect(self.reset)
-        header.addWidget(reset)
+        header.addWidget(reset, 0, Qt.AlignmentFlag.AlignTop)
 
         self.state = MeterState(channels)
         self.meter = MeterWidget(self)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(8)
         layout.addLayout(header)
         layout.addWidget(self.meter, 1)
 
+        self._started = False
         self.start(channels)
+        self._started = True
 
     @property
     def channels(self):
@@ -785,7 +1031,7 @@ class MeterPanel(QWidget):
         self.capture = Capture(self.node_name, self.title_text, channels, self.passive)
         self.state = MeterState(channels)
         self.meter.updateGeometry()
-        if self.fit:
+        if self.fit and self._started:
             self.fit()
 
     def stop(self):
@@ -808,13 +1054,14 @@ class MeterPanel(QWidget):
         self.tick_peak_db = float(amp_db(peak).max()) if frames else None
         self.live = now - last < 0.5
         if self.capture.error:
-            html = f"<small>{html_escape(self.capture.error)}</small>"
+            html = f'<span style="color:{T.DANGER}">{html_escape(self.capture.error)}</span>'
         elif self.note:
-            html = f'<small><span style="color:#999">{html_escape(self.note)}</span></small>'
+            html = f'<span style="color:{T.MUTED}">{html_escape(self.note)}</span>'
         elif self.live:
-            html = '<small><span style="color:#3c3">● live</span></small>'
+            html = f'<span style="color:{T.OK}">● live</span>'
         else:
-            html = '<small><span style="color:#888">○ idle</span></small>'
+            html = f'<span style="color:{T.IDLE}">○ idle</span>'
+        html = f'<span style="font-size:13px">{html}</span>'
         if html != self._status_html:
             self.status.setText(html)
             self._status_html = html
@@ -828,11 +1075,9 @@ class ManualView(QWidget):
         super().__init__()
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(14)
         self.panels = []
-        for i, m in enumerate(win.cfg["meters"]):
-            if i:
-                layout.addWidget(vline())
+        for m in win.cfg["meters"]:
             def on_channels(ch, m=m):
                 m["channels"] = ch
                 save_config(win.cfg)
@@ -902,7 +1147,9 @@ class SilenceDetector:
             self.on_change()
         elif not silent and self.active:
             self.active = False
-            if not mon_on:
+            if sink_state != "running":
+                why = f"playback stopped, AE-9 sink {sink_state}"
+            elif not mon_on:
                 why = "output monitor went quiet"
             elif wuh_ready_since is None:
                 why = "What U Hear unwired/absent"
@@ -935,28 +1182,25 @@ class AE9View(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         row = QHBoxLayout()
-        row.setSpacing(12)
+        row.setSpacing(14)
         self.fixed = {}
-        for i, (key, title, node_name, _gated) in enumerate(FIXED_TAPS):
-            if i:
-                row.addWidget(vline())
+        for key, title, node_name, _gated in FIXED_TAPS:
             passive = self.let_idle and key == "monitor"
             p = MeterPanel(title, node_name, 2, passive=passive, fit=win.fit_window)
             p.note = "searching…"
             self.fixed[key] = p
             row.addWidget(p)
-        layout.addLayout(row, 3)
+        layout.addLayout(row, 5)
 
-        streams_title = QLabel("<b>App streams → AE-9</b>")
-        layout.addWidget(streams_title)
+        layout.addWidget(label("App streams → AE-9", "sectionTitle"))
         self.streams = {}           # stream node id -> (panel, started_at, title)
         self.streams_box = QHBoxLayout()
-        self.streams_box.setSpacing(12)
-        self.no_streams = QLabel("No apps are playing to the AE-9.")
-        self.no_streams.setStyleSheet("color: #888")
+        self.streams_box.setContentsMargins(0, 0, 0, 0)
+        self.streams_box.setSpacing(14)
+        self.no_streams = label("No apps are playing to the AE-9.", "hint")
         self.streams_box.addWidget(self.no_streams)
         self.streams_box.addStretch(1)
         holder = QWidget()
@@ -966,16 +1210,15 @@ class AE9View(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(holder)
-        scroll.setMinimumHeight(290)
-        layout.addWidget(scroll, 3)
+        self.streams_scroll = scroll
+        layout.addWidget(scroll, 4)
+        self._size_streams()
 
-        self.logview = QPlainTextEdit()
-        self.logview.setReadOnly(True)
-        self.logview.setMaximumBlockCount(5000)
-        self.logview.setFont(mono_font(11))
-        self.logview.setMinimumHeight(110)
-        layout.addWidget(self.logview, 1)
-        self.log.view = self.logview
+        layout.addWidget(label("Recent events", "sectionTitle"))
+        self.logview = log_view(80)
+        self.logview.setMaximumHeight(120)
+        layout.addWidget(self.logview)
+        self.log.add_view(self.logview)
 
         self.log(f"SbAe9-AudioMon AE-9 mode started (let the AE-9 idle: "
                  f"{'on' if self.let_idle else 'off'}, always capture inputs: "
@@ -1098,7 +1341,18 @@ class AE9View(QWidget):
                 self.streams_box.insertWidget(self.streams_box.count() - 1, panel)
                 self.log(f"App stream started: {title} (node {sid}, {len(src)} ch)")
             self._wire(snap, self.streams[sid][0], src, None, now)
-        self.no_streams.setVisible(not self.streams)
+        if self.no_streams.isHidden() != bool(self.streams):
+            self.no_streams.setVisible(not self.streams)
+            self._size_streams()
+
+    def _size_streams(self):
+        """Give the app-stream row room only while there are streams."""
+        if self.streams:
+            self.streams_scroll.setMinimumHeight(310)
+            self.streams_scroll.setMaximumHeight(16777215)
+        else:
+            self.streams_scroll.setMinimumHeight(28)
+            self.streams_scroll.setMaximumHeight(28)
 
     def _set_wired(self, key, title, wired, why):
         if self.wired.get(key, False) != wired:
@@ -1147,7 +1401,7 @@ class AE9View(QWidget):
         if self.silence.active:
             self.log(f"SILENT #{self.silence.count} still active at exit")
         self.log("SbAe9-AudioMon AE-9 mode stopped")
-        self.log.view = None
+        self.log.remove_view(self.logview)
         self.graph.stop()
         for p in self.fixed.values():
             p.stop()
@@ -1155,11 +1409,283 @@ class AE9View(QWidget):
             p.stop()
 
 
-def vline():
-    sep = QFrame()
-    sep.setFrameShape(QFrame.Shape.VLine)
-    sep.setFrameShadow(QFrame.Shadow.Sunken)
-    return sep
+def log_view(min_height=90):
+    v = QPlainTextEdit()
+    v.setReadOnly(True)
+    v.setMaximumBlockCount(5000)
+    v.setFont(mono_font(12))
+    v.setMinimumHeight(min_height)
+    return v
+
+
+class Page(QWidget):
+    """Content page: big title (with optional widgets on its right) + body."""
+
+    def __init__(self, title):
+        super().__init__()
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(26, 18, 26, 18)
+        self.body.setSpacing(12)
+        self.head = QHBoxLayout()
+        self.head.setSpacing(12)
+        self.head.addWidget(label(title, "pageTitle"))
+        self.head.addStretch(1)
+        self.body.addLayout(self.head)
+
+
+class MonitorPage(Page):
+    """AE-9 meters, app streams and recent events. Hosts the AE9View."""
+
+    def __init__(self, win):
+        super().__init__("Monitor")
+        self.win = win
+        self.view = None
+        self.off_banner = QFrame()
+        self.off_banner.setObjectName("banner")
+        bl = QHBoxLayout(self.off_banner)
+        bl.setContentsMargins(14, 10, 14, 10)
+        bl.addWidget(label("Auto-wire AE-9 is off, so nothing is being monitored. "
+                           "Turn it on in Settings, or use Manual Meters.", wrap=True), 1)
+        self.body.addWidget(self.off_banner)
+        self.holder = QVBoxLayout()
+        self.body.addLayout(self.holder, 1)
+
+    def rebuild(self):
+        if self.view:
+            self.view.stop()
+            self.view.setParent(None)
+            self.view.deleteLater()
+            self.view = None
+        on = self.win.cfg["mode"] == "ae9"
+        self.off_banner.setVisible(not on)
+        if on:
+            self.view = AE9View(self.win)
+            self.holder.addWidget(self.view)
+
+    def tick(self, now, dt):
+        if self.view:
+            self.view.tick(now, dt)
+
+    def stop(self):
+        if self.view:
+            self.view.stop()
+
+
+class LogPage(Page):
+    def __init__(self, win):
+        super().__init__("Event Log")
+        open_btn = QPushButton(" Open log file")
+        open_btn.setIcon(make_icon("folder", T.TEXT, size=18))
+        open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(win.log.path)))
+        self.head.addWidget(open_btn)
+        self.body.addWidget(label(
+            f"Saved to {win.log.path}. Local time, to the second, so it lines up with "
+            "journalctl -k (and the driver's ae9-pause-test: lines).", "hint", wrap=True))
+        self.view = log_view(200)
+        self.body.addWidget(self.view, 1)
+        win.log.add_view(self.view, backfill=True)
+
+
+class ManualPage(Page):
+    """Two hand-wired meters, created the first time the page is opened."""
+
+    def __init__(self, win):
+        super().__init__("Manual Meters")
+        self.win = win
+        self.view = None
+        self.body.addWidget(label(
+            "Two meters with unlinked input ports. Wire anything into them with Helvum, "
+            "qpwgraph or pw-link. They run alongside the AE-9 monitor.", "hint", wrap=True))
+        self.holder = QVBoxLayout()
+        self.body.addLayout(self.holder, 1)
+
+    def showEvent(self, e):
+        if self.view is None:
+            self.view = ManualView(self.win)
+            self.holder.addWidget(self.view)
+        super().showEvent(e)
+
+    def tick(self, now, dt):
+        if self.view:
+            self.view.tick(now, dt)
+
+    def stop(self):
+        if self.view:
+            self.view.stop()
+
+
+class SettingsPage(Page):
+    def __init__(self, win):
+        super().__init__("Settings")
+        self.win = win
+        cfg = win.cfg
+
+        def check(text, hint, checked, slot):
+            cb = QCheckBox(text)
+            cb.setChecked(checked)
+            cb.toggled.connect(slot)
+            self.body.addWidget(cb)
+            h = label(hint, "hint", wrap=True)
+            h.setContentsMargins(30, 0, 0, 6)
+            self.body.addWidget(h)
+            return cb
+
+        self.body.addWidget(label("Monitoring", "sectionTitle"))
+        self.auto_cb = check(
+            "Auto-wire AE-9",
+            "Meter the AE-9 output monitor, What U Hear, Mic / Line In, Optical In and every "
+            "app stream playing to the AE-9. Listen-only: never changes defaults, moves "
+            "streams or touches mixer controls.",
+            cfg["mode"] == "ae9", win.set_auto)
+        self.idle_cb = check(
+            "Let the AE-9 idle",
+            "Meters never keep the card awake. The output and app meters are passive, and "
+            "What U Hear / Mic / Optical are only wired while the AE-9 sink is running. "
+            "Off: everything stays wired and the AE-9 never suspends.",
+            cfg["let_idle"], win.set_let_idle)
+        self.capture_cb = check(
+            "Always capture inputs",
+            "Comparison mode: keep What U Hear / Mic / Optical wired while the card idles "
+            "(their capture converters and DMA stay running). The sink can still suspend.",
+            cfg["always_capture"], win.set_always_capture)
+
+        self.body.addSpacing(6)
+        self.body.addWidget(label("Window", "sectionTitle"))
+        self.frame_cb = check(
+            "Use the desktop's title bar",
+            "Off: the app draws its own title bar, like Sound Blaster Command.",
+            not cfg["frameless"], lambda on: win.set_frameless(not on))
+
+        self.body.addSpacing(6)
+        self.body.addWidget(label("Device", "sectionTitle"))
+        self.info = label("", "hint", wrap=True)
+        self.info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.body.addWidget(self.info)
+        self.body.addStretch(1)
+        self.sync()
+
+    def sync(self):
+        on = self.win.cfg["mode"] == "ae9"
+        self.idle_cb.setEnabled(on)
+        self.capture_cb.setEnabled(on and self.win.cfg["let_idle"])
+
+    def showEvent(self, e):
+        self.info.setText(
+            f"Driver: {driver_info()}<br>"
+            f"SILENT: output monitor above {MON_SIGNAL_DB:.0f} dBFS while What U Hear stays below "
+            f"{WUH_SILENT_DB:.0f} dBFS for over {SILENT_AFTER} s ({WIRE_GRACE:.0f} s grace after "
+            f"wiring What U Hear)<br>"
+            f"Log: {self.win.log.path}<br>Config: {CONFIG_PATH}")
+        super().showEvent(e)
+
+
+class TitleBar(QFrame):
+    """The window's header. Without the desktop's frame it is the window's
+    handle: drag to move, double-click to maximize."""
+
+    def __init__(self, win):
+        super().__init__()
+        self.win = win
+        self.setObjectName("titleBar")
+        h = QHBoxLayout(self)
+        h.setContentsMargins(18, 8, 10, 6)
+        h.setSpacing(4)
+        names = QVBoxLayout()
+        names.setSpacing(0)
+        names.addWidget(label("SbAe9-AudioMon", "appTitle"))
+        names.addWidget(label("AE-9", "deviceName"))
+        h.addLayout(names)
+        h.addStretch(1)
+        self.buttons = []
+        for name, tip, slot in (("minimize", "Minimize", win.showMinimized),
+                                ("maximize", "Maximize", self._toggle_max),
+                                ("close", "Close", win.close)):
+            b = QToolButton()
+            b.setObjectName("winClose" if name == "close" else "winButton")
+            b.setIcon(make_icon(name, T.MUTED, active=T.TEXT, size=18))
+            b.setIconSize(QSize(18, 18))
+            b.setFixedSize(34, 28)
+            b.setToolTip(tip)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.clicked.connect(slot)
+            h.addWidget(b, 0, Qt.AlignmentFlag.AlignTop)
+            self.buttons.append(b)
+
+    def _toggle_max(self):
+        self.win.showNormal() if self.win.isMaximized() else self.win.showMaximized()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.win.frameless and self.win.windowHandle():
+            self.win.windowHandle().startSystemMove()   # the desktop moves it (works on Wayland)
+            e.accept()
+            return
+        super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.win.frameless:
+            self._toggle_max()
+            e.accept()
+
+
+class EdgeGrip(QWidget):
+    """Invisible strip along a window edge: drag to resize a frameless window."""
+    E = Qt.Edge
+    CURSORS = {
+        (E.LeftEdge,): Qt.CursorShape.SizeHorCursor, (E.RightEdge,): Qt.CursorShape.SizeHorCursor,
+        (E.TopEdge,): Qt.CursorShape.SizeVerCursor, (E.BottomEdge,): Qt.CursorShape.SizeVerCursor,
+        (E.TopEdge, E.LeftEdge): Qt.CursorShape.SizeFDiagCursor,
+        (E.BottomEdge, E.RightEdge): Qt.CursorShape.SizeFDiagCursor,
+        (E.TopEdge, E.RightEdge): Qt.CursorShape.SizeBDiagCursor,
+        (E.BottomEdge, E.LeftEdge): Qt.CursorShape.SizeBDiagCursor,
+    }
+    SIZE = 6
+
+    def __init__(self, edges, win):
+        super().__init__(win)
+        self.edges = edges
+        self.win = win
+        self.setCursor(self.CURSORS[edges])
+
+    def place(self):
+        w, h, s = self.win.width(), self.win.height(), self.SIZE
+        E = self.E
+        x = 0 if E.LeftEdge in self.edges else (w - s if E.RightEdge in self.edges else s)
+        y = 0 if E.TopEdge in self.edges else (h - s if E.BottomEdge in self.edges else s)
+        gw = s if (E.LeftEdge in self.edges or E.RightEdge in self.edges) else w - 2 * s
+        gh = s if (E.TopEdge in self.edges or E.BottomEdge in self.edges) else h - 2 * s
+        self.setGeometry(x, y, gw, gh)
+        self.raise_()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.win.windowHandle():
+            edges = self.edges[0]
+            for extra in self.edges[1:]:
+                edges |= extra
+            self.win.windowHandle().startSystemResize(edges)
+            e.accept()
+
+
+class StatusDot(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.color = T.IDLE
+        self.setFixedSize(16, 16)
+
+    def set_color(self, color):
+        if color != self.color:
+            self.color = color
+            self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(self.color))
+        p.drawEllipse(QRectF(2, 2, 12, 12))
+
+
+NAV = (("Monitor", "wave"), ("Event Log", "log"), None, ("Manual Meters", "mixer"))
+NAV_BOTTOM = (("Settings", "settings"),)
 
 
 class MainWindow(QWidget):
@@ -1167,113 +1693,241 @@ class MainWindow(QWidget):
         super().__init__()
         self.cfg = cfg
         self.log = log
-        self.body = None
-        self.setWindowTitle("SbAe9-AudioMon")
-        self.setWindowIcon(QIcon.fromTheme("audio-volume-high"))
+        self.setObjectName("root")
+        self.setWindowTitle("SbAe9-AudioMon — AE-9")
+        self.setWindowIcon(app_icon())
+        self.resize(1320, 860)
 
-        bar = QHBoxLayout()
-        bar.setSpacing(14)
-        self.auto_cb = QCheckBox("Auto-wire AE-9")
-        self.auto_cb.setToolTip("Meter the AE-9 output monitor, What U Hear, inputs and every app\n"
-                                "stream playing to it. Off = two meters you wire by hand.")
-        self.auto_cb.setChecked(cfg["mode"] == "ae9")
-        self.auto_cb.toggled.connect(self._on_mode)
-        bar.addWidget(self.auto_cb)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        self.title_bar = TitleBar(self)
+        v.addWidget(self.title_bar)
 
-        self.idle_cb = QCheckBox("Let the AE-9 idle")
-        self.idle_cb.setToolTip(
-            "On: meters never keep the AE-9 awake. The output monitor and app-stream\n"
-            "meters are passive, and What U Hear / Mic / Optical are only wired while\n"
-            "the AE-9 sink is running, so the card can idle and suspend normally.\n"
-            "Off: everything stays wired, which keeps the AE-9 running all the time.")
-        self.idle_cb.setChecked(cfg["let_idle"])
-        self.idle_cb.toggled.connect(self._on_idle)
-        bar.addWidget(self.idle_cb)
+        mid = QHBoxLayout()
+        mid.setSpacing(0)
+        v.addLayout(mid, 1)
 
-        self.capture_cb = QCheckBox("Always capture inputs")
-        self.capture_cb.setToolTip(
-            "Keep What U Hear / Mic / Optical wired even while the AE-9 sink is idle.\n"
-            "The output and app-stream meters stay passive, so the sink can still\n"
-            "suspend, but the card's capture PCMs stay open. Used to compare\n"
-            "against the default, where the card is fully idle between plays.")
-        self.capture_cb.setChecked(cfg["always_capture"])
-        self.capture_cb.toggled.connect(self._on_capture)
-        bar.addWidget(self.capture_cb)
+        side = QFrame()
+        side.setObjectName("sidebar")
+        side.setFixedWidth(210)
+        sl = QVBoxLayout(side)
+        sl.setContentsMargins(0, 10, 0, 12)
+        sl.setSpacing(2)
+        sl.addWidget(label("AE-9 Monitoring", "sideCaption"))
+        sl.addSpacing(4)
+        self.stack = QStackedWidget()
+        self.stack.setObjectName("content")
+        self.nav_buttons = []
 
-        self.sink_lbl = QLabel()
-        bar.addWidget(self.sink_lbl)
-        self.silent_lbl = QLabel(" SILENT ")
-        self.silent_lbl.setStyleSheet("background:#d22; color:white; font-weight:bold;"
-                                      "padding:2px 8px; border-radius:4px")
-        self.silent_lbl.setToolTip("Output monitor has signal but What U Hear is below "
+        self.monitor = MonitorPage(self)
+        self.log_page = LogPage(self)
+        self.manual = ManualPage(self)
+        self.settings = SettingsPage(self)
+        pages = {"Monitor": self.monitor, "Event Log": self.log_page,
+                 "Manual Meters": self.manual, "Settings": self.settings}
+
+        def add(entry):
+            name, ic = entry
+            idx = self.stack.addWidget(pages[name])
+            b = QPushButton(" " + name)
+            b.setCheckable(True)
+            b.setIcon(make_icon(ic, T.TEXT, active=T.ACCENT_HI, size=22))
+            b.setIconSize(QSize(22, 22))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.clicked.connect(lambda _=False, i=idx: self.go(i))
+            self.nav_buttons.append(b)
+            sl.addWidget(b)
+
+        for entry in NAV:
+            if entry is None:
+                sl.addWidget(hline())
+            else:
+                add(entry)
+        sl.addStretch(1)
+        sl.addWidget(hline())
+        for entry in NAV_BOTTOM:
+            add(entry)
+        mid.addWidget(side)
+        mid.addWidget(self.stack, 1)
+
+        # bottom status bar
+        bottom = QFrame()
+        bottom.setObjectName("bottomBar")
+        bottom.setFixedHeight(56)
+        bl = QHBoxLayout(bottom)
+        bl.setContentsMargins(20, 0, 22, 0)
+        bl.setSpacing(16)
+        self.dot = StatusDot()
+        bl.addWidget(self.dot)
+        bl.addWidget(label("AE-9", "logo"))
+        sep = QFrame()
+        sep.setFixedSize(2, 26)
+        sep.setStyleSheet(f"background:{T.TEXT};")
+        bl.addWidget(sep)
+        self.state_lbl = label("", "profileLabel")
+        bl.addWidget(self.state_lbl)
+
+        # Quick access to Settings -> Monitoring (shown on the Monitor page)
+        self.quick = QWidget()
+        ql = QHBoxLayout(self.quick)
+        ql.setContentsMargins(10, 0, 0, 0)
+        ql.setSpacing(16)
+        qsep = QFrame()
+        qsep.setFixedSize(1, 22)
+        qsep.setStyleSheet(f"background:{rgba(T.OVERLAY, 0.25)};")
+        ql.addWidget(qsep)
+
+        def quick(text, tip, slot):
+            rb = QRadioButton(text)
+            rb.setObjectName("quickToggle")
+            rb.setAutoExclusive(False)      # independent on/off switches
+            rb.setToolTip(tip)
+            rb.setCursor(Qt.CursorShape.PointingHandCursor)
+            rb.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            rb.toggled.connect(slot)
+            ql.addWidget(rb)
+            return rb
+
+        self.q_auto = quick("Auto-wire", "Auto-wire AE-9 (Settings → Monitoring)", self.set_auto)
+        self.q_idle = quick("Let idle", "Let the AE-9 idle (Settings → Monitoring)", self.set_let_idle)
+        self.q_capture = quick("Always capture", "Always capture inputs (Settings → Monitoring)",
+                               self.set_always_capture)
+        bl.addWidget(self.quick)
+        bl.addStretch(1)
+        self.silent_lbl = label("SILENT", "silentBadge")
+        self.silent_lbl.setToolTip(f"Output monitor has signal but What U Hear is below "
                                    f"{WUH_SILENT_DB:.0f} dBFS for more than {SILENT_AFTER}s")
         self.silent_lbl.hide()
-        bar.addWidget(self.silent_lbl)
-        self.dropouts_lbl = QLabel()
-        bar.addWidget(self.dropouts_lbl)
-        bar.addStretch(1)
-        self.log_btn = QPushButton("Open log")
-        self.log_btn.setToolTip(LOG_PATH)
-        self.log_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(LOG_PATH)))
-        bar.addWidget(self.log_btn)
+        bl.addWidget(self.silent_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.dropouts_lbl = label("", "bigValue")
+        bl.addWidget(self.dropouts_lbl)
+        v.addWidget(bottom)
 
-        self.layout_ = QVBoxLayout(self)
-        self.layout_.setContentsMargins(10, 10, 10, 10)
-        self.layout_.setSpacing(10)
-        self.layout_.addLayout(bar)
-        self._build()
+        self.grips = [EdgeGrip(edges, self) for edges in EdgeGrip.CURSORS]
+        self.frameless = False
+        self.set_frameless(cfg["frameless"], save=False)
+
+        self._silent = False
+        self._sink_state = None
+        self.sync_controls()
+        self.monitor.rebuild()
+        self._refresh_status()
+        page = cfg.get("page", 0)
+        self.go(page if isinstance(page, int) and 0 <= page < self.stack.count() else 0)
 
         self.last_tick = time.monotonic()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(33)
 
-    def _build(self):
-        if self.body:
-            self.body.stop()
-            self.body.setParent(None)
-            self.body.deleteLater()
-        ae9 = self.cfg["mode"] == "ae9"
-        for w in (self.idle_cb, self.capture_cb, self.sink_lbl, self.dropouts_lbl, self.log_btn):
-            w.setVisible(ae9)
-        # Without "let idle" everything is always wired anyway.
-        self.capture_cb.setEnabled(self.cfg["let_idle"])
-        self.silent_lbl.hide()
-        self.set_sink_state(None)
-        self.dropouts_lbl.setText("Dropouts: 0")
-        self.body = AE9View(self) if ae9 else ManualView(self)
-        self.layout_.addWidget(self.body, 1)
-        self.fit_window()
+    # -- navigation / settings -------------------------------------------
 
-    def _on_mode(self, on):
+    def go(self, idx):
+        self.stack.setCurrentIndex(idx)
+        self.quick.setVisible(self.stack.currentWidget() is self.monitor)
+        for i, b in enumerate(self.nav_buttons):
+            b.setChecked(i == idx)
+        if self.cfg.get("page") != idx:
+            self.cfg["page"] = idx
+            save_config(self.cfg)
+
+    def sync_controls(self):
+        """Keep the Settings checkboxes and the bottom-bar toggles in step."""
+        cfg = self.cfg
+        auto = cfg["mode"] == "ae9"
+        for widget, value in ((self.settings.auto_cb, auto), (self.q_auto, auto),
+                              (self.settings.idle_cb, cfg["let_idle"]), (self.q_idle, cfg["let_idle"]),
+                              (self.settings.capture_cb, cfg["always_capture"]),
+                              (self.q_capture, cfg["always_capture"])):
+            blocker = QSignalBlocker(widget)
+            widget.setChecked(value)
+            del blocker
+        self.settings.sync()
+        self.q_idle.setEnabled(auto)
+        self.q_capture.setEnabled(auto and cfg["let_idle"])
+
+    def set_auto(self, on):
+        if (self.cfg["mode"] == "ae9") == on:
+            return
         self.cfg["mode"] = "ae9" if on else "manual"
         save_config(self.cfg)
-        self._build()
+        self.sync_controls()
+        self.monitor.rebuild()
+        self._sink_state = None
+        self._silent = False
+        self._refresh_status()
 
-    def _on_idle(self, on):
+    def set_let_idle(self, on):
+        if self.cfg["let_idle"] == on:
+            return
         self.cfg["let_idle"] = on
         save_config(self.cfg)
+        self.sync_controls()
         self.log(f"'Let the AE-9 idle' turned {'on' if on else 'off'}; rebuilding meters")
-        self._build()
+        self.monitor.rebuild()
 
-    def _on_capture(self, on):
+    def set_always_capture(self, on):
+        if self.cfg["always_capture"] == on:
+            return
         self.cfg["always_capture"] = on
         save_config(self.cfg)
+        self.sync_controls()
         self.log(f"'Always capture inputs' turned {'on' if on else 'off'}; rebuilding meters")
-        self._build()
+        self.monitor.rebuild()
+
+    def set_frameless(self, on, save=True):
+        was_visible = self.isVisible()
+        self.frameless = on
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, on)  # hides the window
+        for b in self.title_bar.buttons:
+            b.setVisible(on)
+        for g in self.grips:
+            g.setVisible(on)
+            g.place()
+        if save:
+            self.cfg["frameless"] = on
+            save_config(self.cfg)
+        if was_visible:
+            self.show()
+
+    def resizeEvent(self, e):
+        for g in self.grips:
+            g.place()
+        super().resizeEvent(e)
+
+    # -- status bar ------------------------------------------------------
 
     def set_sink_state(self, state):
-        colors = {"running": "#3c3", "idle": "#cc3", "suspended": "#888", "error": "#e44"}
-        s = state or "absent"
-        self.sink_lbl.setText(f'AE-9 sink: <span style="color:{colors.get(s, "#e44")}">{s}</span>')
+        self._sink_state = state
+        self._refresh_status()
 
     def set_silent(self, active, count):
-        self.silent_lbl.setVisible(active)
+        self._silent = active
         self.dropouts_lbl.setText(f"Dropouts: {count}")
+        self._refresh_status()
+
+    def _refresh_status(self):
+        if self.cfg["mode"] != "ae9":
+            self.dot.set_color(T.DIM)
+            self.state_lbl.setText("Auto-wire off")
+            self.dropouts_lbl.setText("")
+            self.silent_lbl.hide()
+            return
+        s = self._sink_state
+        colors = {"running": T.OK, "idle": T.WARN, "suspended": T.IDLE}
+        self.dot.set_color(T.DANGER if self._silent else colors.get(s, T.DANGER))
+        self.state_lbl.setText((s or "not found").capitalize())
+        self.state_lbl.setToolTip("AE-9 sink state")
+        self.silent_lbl.setVisible(self._silent)
+        if not self.dropouts_lbl.text():
+            self.dropouts_lbl.setText("Dropouts: 0")
 
     def fit_window(self):
         """Shrink the window back to its natural width (e.g. after fewer channels)."""
         def shrink():
+            if self.isMaximized():
+                return
             if self.layout():
                 self.layout().activate()
             # Asking for width 1 gets clamped to the minimum the layout allows.
@@ -1284,11 +1938,12 @@ class MainWindow(QWidget):
         now = time.monotonic()
         dt = min(now - self.last_tick, 0.25)
         self.last_tick = now
-        self.body.tick(now, dt)
+        self.monitor.tick(now, dt)
+        self.manual.tick(now, dt)
 
     def stop(self):
-        if self.body:
-            self.body.stop()
+        self.monitor.stop()
+        self.manual.stop()
 
 
 def main():
@@ -1305,6 +1960,8 @@ def main():
                     help="AE-9 mode: keep What U Hear/Mic/Optical wired while the card idles")
     ap.add_argument("-c", "--channels", type=int, choices=CHANNEL_CHOICES,
                     help="manual mode: channel count for both meters")
+    ap.add_argument("--frame", action=argparse.BooleanOptionalAction, default=None,
+                    help="use the desktop's title bar instead of our own")
     ap.add_argument("--log", default=LOG_PATH, help=f"debug log file (default {LOG_PATH})")
     args, qt_args = ap.parse_known_args()
 
@@ -1313,6 +1970,10 @@ def main():
         cfg["mode"] = "ae9" if args.ae9 else "manual"
     if args.keep_awake or args.let_idle:
         cfg["let_idle"] = args.let_idle
+    if args.frame is not None:
+        cfg["frameless"] = not args.frame
+    if args.manual:
+        cfg["page"] = 2   # open on Manual Meters
     if args.always_capture is not None:
         cfg["always_capture"] = args.always_capture
     if args.channels:
@@ -1322,6 +1983,8 @@ def main():
     app = QApplication([sys.argv[0]] + qt_args)
     app.setApplicationName("SbAe9-AudioMon")
     app.setDesktopFileName("sbae9-audiomon")
+    app.setStyle("Fusion")
+    app.setStyleSheet(stylesheet())
 
     win = MainWindow(cfg, EventLog(args.log))
     app.aboutToQuit.connect(win.stop)
