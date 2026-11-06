@@ -124,7 +124,7 @@ class FakeMixer:
 
     def add_bool(self, name, value=True, writable=True):
         """A switch the snapshot doesn't have (e.g. Optical Out, or a read-only
-        "Head Unit Phones Plugged")."""
+        "Head Unit 3.5mm Phones Plugged")."""
         return self._add(name, value, type=alsa.TYPE_BOOLEAN, min=0, max=1, items=[],
                          writable=writable)
 
