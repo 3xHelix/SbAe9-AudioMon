@@ -15,7 +15,8 @@ from sbae9kit import frame
 from . import __version__, core
 from . import theme as T
 from .core import CONFIG_PATH, save_config
-from .monitor import MON_SIGNAL_DB, SILENT_AFTER, WIRE_GRACE, WUH_SILENT_DB, AE9View, ManualView
+from . import monitor
+from .monitor import AE9View, ManualView
 from .theme import app_icon, make_icon, rgba, stylesheet
 from .widgets import StatusDot, hline, label, log_view
 
@@ -185,6 +186,7 @@ class SettingsPage(Page):
 
         # palette, shared with Sound Blaster Command (sbae9kit.palettes)
         prow = QHBoxLayout()
+        prow.setContentsMargins(0, 8, 0, 0)
         prow.setSpacing(12)
         prow.addWidget(QLabel("Palette"))
         self.palette = QComboBox()
@@ -250,8 +252,8 @@ class SettingsPage(Page):
         self.info.setText(
             f"SbAe9-AudioMon {__version__}<br>"
             f"Driver: {core.driver_info()}<br>"
-            f"SILENT: output monitor above {MON_SIGNAL_DB:.0f} dBFS while What U Hear stays below "
-            f"{WUH_SILENT_DB:.0f} dBFS for over {SILENT_AFTER} s ({WIRE_GRACE:.0f} s grace after "
+            f"SILENT: output monitor above {monitor.MON_SIGNAL_DB:.0f} dBFS while What U Hear stays below "
+            f"{monitor.WUH_SILENT_DB:.0f} dBFS for over {monitor.SILENT_AFTER} s ({monitor.WIRE_GRACE:.0f} s grace after "
             f"wiring What U Hear)<br>"
             f"Log: {self.win.log.path}<br>Config: {CONFIG_PATH}")
         super().showEvent(e)
@@ -402,7 +404,7 @@ class MainWindow(QWidget):
         bl.addStretch(1)
         self.silent_lbl = label("SILENT", "silentBadge")
         self.silent_lbl.setToolTip(f"Output monitor has signal but What U Hear is below "
-                                   f"{WUH_SILENT_DB:.0f} dBFS for more than {SILENT_AFTER}s")
+                                   f"{monitor.WUH_SILENT_DB:.0f} dBFS for more than {monitor.SILENT_AFTER}s")
         self.silent_lbl.hide()
         bl.addWidget(self.silent_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         self.dropouts_lbl = label("", "bigValue")

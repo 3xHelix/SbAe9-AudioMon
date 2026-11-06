@@ -5,6 +5,20 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## Unreleased
+
+### Added
+
+- README screenshots (`docs/`), like Sound Blaster Command's: a real-card
+  Monitor page, plus a silent restart, the Event Log, Manual Meters, Settings
+  and Glass from the fake AE-9. `tools/screenshots.py` regenerates them.
+
+### Fixed
+
+- Settings → Device and the SILENT badge's tooltip show the SILENT timings
+  the app is actually using.
+- A little more space above Settings' Palette / UI scale row.
+
 ## 0.3.0 (2026-11-06)
 
 Built on SbAe9-Kit, the base it now shares with Sound Blaster Command.

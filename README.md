@@ -7,6 +7,36 @@ Linux). Both apps are built on one shared base,
 [SbAe9-Kit](https://github.com/3xHelix/SbAe9-Kit) (vendored here as
 `sbae9kit/`), so they look, run, install and test the same way.
 
+## Screenshots
+
+<img src="docs/monitor.png" alt="Monitor page on a real AE-9">
+<sub>The Monitor page on a real AE-9, with VLC playing and a call app open. The
+output and What U Hear agree, so the card is playing what PipeWire sends it.
+The optical jack is dark.</sub>
+
+<table>
+  <tr>
+    <td><img src="docs/silent.png" alt="A SILENT dropout"><br><sub>A silent restart caught: the output plays, What U Hear stays silent</sub></td>
+    <td><img src="docs/log.png" alt="Event Log page"><br><sub>Event Log: suspend, resume and the SILENT, timestamped to the second</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/manual.png" alt="Manual Meters page"><br><sub>Manual Meters, with a player wired in by hand</sub></td>
+    <td><img src="docs/settings.png" alt="Settings page"><br><sub>Settings</sub></td>
+  </tr>
+</table>
+
+Shown in the Helix palette. All but the first come from the fake AE-9, so the
+dropout can be shown on demand. Regenerate them with
+`python3 tools/screenshots.py [--palette NAME]`.
+
+**Glass** (Settings → Window): frosted, see-through backgrounds on any
+palette, here Helix at 70%.
+
+<img src="docs/glass-monitor.png" alt="Monitor page in Glass mode">
+<sub>Rendered offscreen with `python3 tools/screenshots.py --glass BACKDROP.png`,
+over a backdrop blurred the way KDE frosts it. On the desktop, KWin does the
+blur.</sub>
+
 ## Window
 
 - **Title bar:** the app draws its own, like Sound Blaster Command. Drag it to
@@ -137,6 +167,7 @@ installed. Re-run it after each tested change.
 | `sbae9kit/` | The shared kit, vendored from SbAe9-Kit by its `tools/sync_kit.py`. Don't edit it here; `tests/test_kit.py` checks it's unchanged. AudioMon never imports its `mixer` (ALSA writes) |
 | `appicon/` | The app icon, 16–512 px, cut by SbAe9-Kit's `tools/make_icons.py` from the artwork `Neon VU Meter Diagnostics.png` (kept outside the repo) |
 | `tests/`, `tools/fake_ae9.py` | Tests and the demo on the fake AE-9 |
+| `docs/`, `tools/screenshots.py` | The README screenshots, and the tool that renders them on the fake AE-9 |
 
 ## Testing without the card: the fake AE-9
 
