@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+# icon artwork: kept locally, not in the repo (the icons in appicon/ are cut from it)
+Neon VU Meter Diagnostics.png

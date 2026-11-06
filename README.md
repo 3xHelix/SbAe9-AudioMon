@@ -135,7 +135,7 @@ installed. Re-run it after each tested change.
 | `sbae9-audiomon` | The launcher (runs the package from wherever it lives) |
 | `audiomon/` | The app: `core` (constants, config), `pipewire` (graph, linking, AE-9 nodes), `capture` (pw-record meters), `meters`, `monitor` (AE-9 wiring, SILENT), `widgets`, `window`, `theme`, `eventlog` |
 | `sbae9kit/` | The shared kit, vendored from SbAe9-Kit by its `tools/sync_kit.py`. Don't edit it here; `tests/test_kit.py` checks it's unchanged. AudioMon never imports its `mixer` (ALSA writes) |
-| `appicon/` | The app icon, 16–512 px, cut from `Neon VU Meter Diagnostics.png` by SbAe9-Kit's `tools/make_icons.py` |
+| `appicon/` | The app icon, 16–512 px, cut by SbAe9-Kit's `tools/make_icons.py` from the artwork `Neon VU Meter Diagnostics.png` (kept outside the repo) |
 | `tests/`, `tools/fake_ae9.py` | Tests and the demo on the fake AE-9 |
 
 ## Testing without the card: the fake AE-9
