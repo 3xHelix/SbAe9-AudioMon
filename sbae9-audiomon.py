@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 RATE = 48000
 BLOCK = 512  # frames per read / node latency
 CHANNEL_CHOICES = [2, 4, 6, 8]
@@ -1029,6 +1029,7 @@ class MeterPanel(QFrame):
         self.alert = False
         self.note = None            # status text override (set by the AE-9 view)
         self.tick_peak_db = None    # loudest sample this tick, None if no data
+        self.last_sound = 0.0       # last time anything above digital silence arrived
         self._status_html = None
 
         sub = subtitle if subtitle is not None else node_name
@@ -1107,6 +1108,8 @@ class MeterPanel(QFrame):
         peak, sumsq, frames, last = self.capture.take()
         self.state.update(peak, sumsq, frames, last, now, dt)
         self.tick_peak_db = float(amp_db(peak).max()) if frames else None
+        if self.tick_peak_db is not None and self.tick_peak_db > FLOOR_DB:
+            self.last_sound = now
         self.live = now - last < 0.5
         if self.capture.error:
             html = f'<span style="color:{T.DANGER}">{html_escape(self.capture.error)}</span>'
@@ -1352,7 +1355,9 @@ class AE9View(QWidget):
                 panel.start(want)
             hold_off = self.let_idle and gated and not sink_running and not self.always_capture
             wired = self._wire(snap, panel, src, [] if hold_off else None, now)
-            if key == "optical" and (node.state == "error" or (wired and not panel.live)):
+            # An unlit optical jack still runs and sends digital silence (or, on
+            # some drivers, nothing at all): either way that's "no signal".
+            if key == "optical" and (node.state == "error" or (wired and now - panel.last_sound > 0.5)):
                 panel.note = "no signal"
             elif hold_off:
                 panel.note = "unwired (AE-9 idle)"

@@ -5,6 +5,17 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.2.1 (2026-11-06)
+
+### Fixed
+
+- **Optical In with no light** read "live" at -inf on the real card, which
+  keeps the optical input running and sends digital silence. It now reads "no
+  signal" when nothing above silence has arrived for half a second (or nothing
+  at all arrives).
+- The fake AE-9 rig's Optical In now does the same as the real card (silence,
+  not no data), and its test covers dark → lit → dark.
+
 ## 0.2.0 (2026-11-06)
 
 ### Added

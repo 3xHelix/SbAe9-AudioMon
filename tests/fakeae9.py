@@ -24,7 +24,9 @@ The model, as close to the real thing as the app can see:
   - A meter only gets data from a source that's running (passive or not).
   - What U Hear plays back the output monitor 3.1 dB lower while the sink runs,
     unless `silent_restart` is set: then it runs but delivers silence (the bug).
-  - Optical In delivers nothing unless `optical_db` is set (no light on the jack).
+  - Optical In with no light on the jack still runs and delivers digital
+    silence, as the real card does (seen on driver 0.9.2); `optical_db` sets
+    the level of a lit jack.
 """
 
 import atexit
@@ -72,7 +74,7 @@ class FakePipeWire:
         self.streams = {}             # node id -> level dBFS
         self.silent_restart = False   # What U Hear runs but delivers silence
         self.mic_db = None            # level on Mic / Line In (None = no data)
-        self.optical_db = None        # level on Optical In (None = no light, no data)
+        self.optical_db = None        # level on a lit Optical In (None = no light: silence)
         self.jitter = 0.0             # +/- dB of random wobble on every level (demo)
         self._idle_since = {}
         self._card_nodes = []
@@ -272,7 +274,7 @@ class FakePipeWire:
         if name == MIC:
             return self._wobble(self.mic_db) if self.mic_db is not None else -math.inf
         if name == OPTICAL:
-            return self._wobble(self.optical_db)
+            return self._wobble(self.optical_db) if self.optical_db is not None else -math.inf
         return None
 
     def levels_into(self, meter_nid, names):

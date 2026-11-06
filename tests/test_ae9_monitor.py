@@ -195,9 +195,14 @@ class OpticalWithoutLight(MonitorTest):
     def test_optical_reads_no_signal(self):
         self.assertTrue(wait_until(lambda: self.wired("optical")))
         process(800)
-        self.assertEqual(self.view.fixed["optical"].note, "no signal")
-        self.pw.optical_db = -20
-        self.assertTrue(wait_until(lambda: self.view.fixed["optical"].note is None))
+        optical = self.view.fixed["optical"]
+        self.assertTrue(optical.live)                 # the dark jack still sends (silent) data...
+        self.assertEqual(optical.note, "no signal")  # ...which reads as no signal
+        self.pw.optical_db = -20                      # light on the jack
+        self.assertTrue(wait_until(lambda: optical.note is None))
+        self.assertAlmostEqual(optical.tick_peak_db, -20, delta=0.5)
+        self.pw.optical_db = None                     # and dark again
+        self.assertTrue(wait_until(lambda: optical.note == "no signal"))
 
 
 class KeepAwake(MonitorTest):
