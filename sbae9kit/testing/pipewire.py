@@ -13,11 +13,14 @@ The model, as close to the real thing as the apps can see:
 - A capture source (What U Hear, Mic, Optical) runs while a non-passive
   capture is linked to it.
 - A capture only gets data from a source that's running.
-- What U Hear plays back the output monitor 3.1 dB lower while the sink
-  runs (measured on the real card), unless `silent_restart` is set: then it
-  runs but delivers silence, which is the bug the apps watch for.
-- Optical In with no light on the jack runs and delivers digital silence,
-  as the real card does on driver 0.9.2. `optical_db` sets a lit jack's level.
+- What U Hear plays back the output monitor at the same level (it's
+  level-exact: 0 dB against the source, confirmed on the real card) while
+  the sink runs, unless `silent_restart` is set: then it runs but delivers
+  silence, which is the bug the apps watch for.
+- Optical In with no light on the jack: the driver refuses to open the
+  capture ("no signal on the optical input"), and PipeWire's node carries on
+  delivering digital silence, which is what the apps see. `optical_db` sets a
+  lit jack's level.
 - The card can drop off and come back (PSU cycle, driver reload).
 
 Apps read it like pw-dump (`objects`, `snapshot()`, `version`, or
@@ -39,7 +42,8 @@ SINK = "alsa_output.pci-0000_06_00.0.analog-stereo"
 MIC = "alsa_input.pci-0000_06_00.0.analog-stereo"
 WHAT_U_HEAR = "alsa_input.ae9_what_u_hear"
 OPTICAL = "alsa_input.ae9_optical"
-WUH_OFFSET_DB = -3.1          # measured on the real card: a -20 dBFS sine reads -23.1
+WUH_OFFSET_DB = 0.0           # What U Hear is level-exact against the source (a -20 dBFS
+                              # peak sine reads -20 peak / -23 RMS, as at the output)
 REAL_SUSPEND_AFTER = 5.0      # PipeWire's default idle -> suspend wait
 
 

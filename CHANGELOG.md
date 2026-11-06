@@ -18,6 +18,9 @@ Blaster AE-9. A debugging companion to
 - Settings → Device and the SILENT badge's tooltip show the SILENT timings
   the app is actually using.
 - A little more space above Settings' Palette / UI scale row.
+- The fake AE-9 (kit 0.3.2) plays What U Hear back at the output's level. The
+  earlier -3.1 dB came from misreading a sine's RMS as an offset; the real
+  card is level-exact, and AudioMon measured it within 0.1-0.3 dB.
 
 ## 0.3.0 (2026-11-06)
 

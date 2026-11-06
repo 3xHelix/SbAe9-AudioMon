@@ -176,7 +176,8 @@ Sound Blaster Command's tests use. `tests/support.py` plugs it into the app.
 It starts from a snapshot of the real machine and fakes the PipeWire graph,
 the meters (`pw-record`) and `pw-link`:
 - The sink runs while an app plays to it, goes idle when nothing does, then suspends.
-- What U Hear follows the output 3.1 dB lower, or goes silent to fake the bug.
+- What U Hear plays the output back at the same level (it's level-exact on the
+  real card), or goes silent to fake the bug.
 - Optical In sends digital silence without light on the jack, like the real card.
 - The card can drop off and come back.
 

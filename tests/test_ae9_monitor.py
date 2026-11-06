@@ -126,7 +126,7 @@ class Playback(MonitorTest):
         process(400)
         self.assertTrue(panel.live)
         self.assertAlmostEqual(panel.tick_peak_db, -14, delta=0.5)
-        self.assertAlmostEqual(self.view.fixed["wuh"].tick_peak_db, -17.1, delta=0.5)
+        self.assertAlmostEqual(self.view.fixed["wuh"].tick_peak_db, -14, delta=0.5)   # level-exact
         self.assertEqual(self.view.silence.count, 0)
 
         self.pw.stop_stream(sid)
