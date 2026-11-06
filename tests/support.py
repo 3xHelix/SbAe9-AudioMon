@@ -56,6 +56,7 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     if time_scale <= 0.1:          # test speed (the demo keeps the real timings)
         monitor.WIRE_GRACE = 0.3
         monitor.SILENT_AFTER = 0.25
+        monitor.PW_RESTART_GRACE = 0.5
     if quiet:
         eventlog.print = lambda *a, **k: None   # the log also echoes to stdout
     reset()

@@ -23,6 +23,8 @@ class Graph:
         self.objects = {}
         self.version = 0
         self.error = None
+        self.down_since = None      # monotonic time pw-dump lost PipeWire, None while connected
+        self.restarts = 0           # times PipeWire came back after being lost
         self._stopping = False
         self._proc = None
         threading.Thread(target=self._run, daemon=True).start()
@@ -40,6 +42,9 @@ class Graph:
                     self.objects.pop(o["id"], None)
                 else:
                     self.objects[o["id"]] = o
+            if self.down_since is not None and self.objects:
+                self.down_since = None
+                self.restarts += 1
             self.version += 1
 
     def _run(self):
@@ -79,6 +84,11 @@ class Graph:
                     buf = ""
             proc.wait()
             if not self._stopping:
+                # PipeWire went away (restarted or stopped): every meter and
+                # link is gone with it. Try again until it's back.
+                with self.lock:
+                    if self.down_since is None:
+                        self.down_since = time.monotonic()
                 time.sleep(1.0)
 
     def stop(self):

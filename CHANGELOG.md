@@ -5,6 +5,22 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.3.3 (2026-11-06)
+
+Ready for driver 0.9.8: survives PipeWire restarts and ignores the voice-chat
+nodes named after the card. On SbAe9-Kit 0.3.5.
+
+### Fixed
+
+- A PipeWire restart (Sound Blaster Command 0.11's What U Hear rate picker
+  does one) is logged as "PipeWire went away" / "PipeWire restarted", and
+  SILENT is held off until the meters are rewired, plus 3 s. Before, it went
+  unnamed in the log and a slow rewire could look like a dropout.
+- Software nodes named after the card, like a WebRTC echo-cancel pair
+  ("ae9_voice" / "ae9_voice_ref"), are never taken for the AE-9. Before, if
+  the card dropped out, they could stand in for its output and mic.
+  (SbAe9-Kit 0.3.5.)
+
 ## 0.3.2 (2026-11-06)
 
 Short names on screen, the detail on hover, as in Sound Blaster Command 0.9.1.

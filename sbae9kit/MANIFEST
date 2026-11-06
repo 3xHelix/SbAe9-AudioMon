@@ -1,8 +1,8 @@
 # sbae9kit, vendored from SbAe9-Kit by tools/sync_kit.py. Don't edit here.
-kit 0.3.4
-commit 64d7bb6
-__init__.py 889bf63b1a9a60cf5b59bcaa61ee3f637c1105b9c088d46486ac288ad8c669e7
-ae9.py d45dcb5d94132a2a82134c0903901a10ca3c443f87a94b6b2e134a7beb3bd10a
+kit 0.3.5
+commit b3efbca
+__init__.py 037c8de1850365f88725b8db9f97ac4366c803cf5ba401afa738decbbcaad9eb
+ae9.py 23512a1450d3e38b8bfef38b950a22443aad2089eb4eeb6e14ed2e8124af9594
 desktop.py 7df0c921dc7a0eb675e8c841991d3ec576bbabd8539c4fa8f5e440dd67fcf16d
 frame.py 2b3393bd3bd21f0e65d4538f1025e3f948f03a5c72ec87449876f474f54913fb
 glass.py 5b2c17dd16c31db235dd1619faa44b20ef128c519535a5892be505201977d0ee

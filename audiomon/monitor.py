@@ -15,6 +15,7 @@ MON_SIGNAL_DB = -50.0   # monitor counts as "has signal" above this (peak)
 WUH_SILENT_DB = -60.0   # What U Hear counts as silent below this (peak)
 SILENT_AFTER = 0.5      # seconds
 WIRE_GRACE = 1.0        # ignore What U Hear for this long after (re)wiring it
+PW_RESTART_GRACE = 3.0  # no SILENT for this long after PipeWire comes back
 
 
 class ManualView(QWidget):
@@ -110,7 +111,6 @@ class SilenceDetector:
                      f"What U Hear {wuh} for {now - onset:.1f}s | sink {sink_state} | {core.driver_info()}")
             self.on_change()
         elif not silent and self.active:
-            self.active = False
             if sink_state != "running":
                 why = f"playback stopped, AE-9 sink {sink_state}"
             elif not mon_on:
@@ -119,6 +119,11 @@ class SilenceDetector:
                 why = "What U Hear unwired/absent"
             else:
                 why = f"What U Hear back at {fmt_db(wuh_db if wuh_db is not None else FLOOR_DB)} dBFS"
+            self.end(now, why)
+
+    def end(self, now, why):
+        if self.active:
+            self.active = False
             self.log(f"SILENT #{self.count} end after {now - self.started:.1f}s ({why})")
             self.on_change()
 
@@ -141,6 +146,9 @@ class AE9View(QWidget):
         self.wired = {}             # tap key -> bool
         self.sink_state = None
         self.wuh_ready_since = None
+        self.pw_down = False        # PipeWire lost (restarting or stopped)
+        self.pw_restarts = 0        # the graph's restart count we've handled
+        self.pw_back_at = -1e9      # when PipeWire last came back
         self.reported_failures = set()
         self.silence = SilenceDetector(self.log, self._silence_changed)
 
@@ -213,8 +221,36 @@ class AE9View(QWidget):
                 self.reported_failures.add(msg)
                 self.log(f"pw-link failed: {msg}")
 
-        self.silence.update(now, self.fixed["monitor"].tick_peak_db, self.fixed["wuh"].tick_peak_db,
-                            self.wuh_ready_since, self.sink_state or "absent")
+        self._watch_pipewire(now)
+        if self.pw_down or now - self.pw_back_at < PW_RESTART_GRACE:
+            self.silence.end(now, "PipeWire restarted")
+        else:
+            self.silence.update(now, self.fixed["monitor"].tick_peak_db, self.fixed["wuh"].tick_peak_db,
+                                self.wuh_ready_since, self.sink_state or "absent")
+
+    def _watch_pipewire(self, now):
+        """A PipeWire restart (Sound Blaster Command's What U Hear rate picker
+        does one) takes every meter and link with it. Name it in the log and
+        hold SILENT off until the meters are rewired, so the gap isn't taken
+        for the silent-restart bug."""
+        down = getattr(self.graph, "down_since", None) is not None
+        restarts = getattr(self.graph, "restarts", 0)
+        if down and not self.pw_down:
+            self.pw_down = True
+            self.log("PipeWire went away (restarting?): meters paused, SILENT held off")
+            self._pipewire_reset(now)
+        if restarts != self.pw_restarts:
+            self.pw_restarts = restarts
+            self.pw_down = False
+            self.pw_back_at = now
+            self.log(f"PipeWire restarted: rewiring the meters | {core.driver_info()}")
+            self._pipewire_reset(now)
+
+    def _pipewire_reset(self, now):
+        self.silence.end(now, "PipeWire restarted")
+        self.pending.clear()            # old link requests died with PipeWire
+        self.reported_failures.clear()
+        self.wuh_ready_since = None
 
     def _silence_changed(self):
         self.fixed["wuh"].alert = self.silence.active

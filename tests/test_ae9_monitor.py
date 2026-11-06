@@ -207,6 +207,52 @@ class CardComesAndGoes(MonitorTest):
         self.assertTrue(wait_until(lambda: self.wired("wuh") and sid in self.view.streams))
 
 
+class PipeWireRestart(MonitorTest):
+    """A PipeWire restart (SBC's What U Hear rate picker does one) isn't the
+    silent-restart bug: it's logged as a restart and SILENT is held off."""
+
+    def test_restart_is_named_and_not_flagged(self):
+        self.pw.add_stream("Music Player", "song.flac", -12)
+        self.assertTrue(wait_until(lambda: self.wired("wuh")))
+        self.pw.silent_restart = True         # an active SILENT when PipeWire goes
+        self.assertTrue(wait_until(lambda: self.view.silence.active, 5))
+
+        self.pw.down_since = time.monotonic()  # what Graph reports when pw-dump loses PipeWire
+        self.assertTrue(wait_until(lambda: not self.view.silence.active))
+        process(800)                            # loud output, silent What U Hear: still held off
+        self.assertEqual(self.view.silence.count, 1)
+        log = self.log_text()
+        self.assertIn("PipeWire went away", log)
+        self.assertIn("SILENT #1 end", log)
+        self.assertIn("(PipeWire restarted)", log)
+
+        self.pw.down_since, self.pw.restarts = None, 1
+        self.assertTrue(wait_until(lambda: "PipeWire restarted: rewiring" in self.log_text()))
+        self.assertIn(support.FAKE_DRIVER, self.log_text().split("PipeWire restarted: rewiring")[1])
+        process(300)                            # inside the grace: no SILENT
+        self.assertEqual(self.view.silence.count, 1)
+        # after it, a What U Hear that's still silent is the bug again
+        self.assertTrue(wait_until(lambda: self.view.silence.active, 5))
+        self.assertEqual(self.view.silence.count, 2)
+
+
+class VirtualAe9Nodes(MonitorTest):
+    """A WebRTC echo-cancel pair named after the card ("ae9_voice" source,
+    "ae9_voice_ref" sink) is never taken for the AE-9, even with the card gone."""
+
+    def test_voice_nodes_are_not_the_card(self):
+        for name, cls in (("ae9_voice", "Audio/Source"), ("ae9_voice_ref", "Audio/Sink")):
+            self.pw._node({"node.name": name, "media.class": cls, "node.virtual": True,
+                           "node.description": "AE-9 Voice (WebRTC)"}, state="running")
+        self.pw._bump()
+        process(400)
+        self.assertEqual(self.view.present["monitor"], self.pw.node(SINK)["id"])
+        self.pw.card_present(False)
+        self.assertTrue(wait_until(lambda: self.view.fixed["monitor"].note == "not found"))
+        self.assertIsNone(self.view.present["mic"])
+        self.assertNotIn("ae9_voice", self.log_text())
+
+
 class OpticalWithoutLight(MonitorTest):
     let_idle = False
 

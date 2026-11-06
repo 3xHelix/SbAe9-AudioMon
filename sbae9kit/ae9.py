@@ -35,10 +35,14 @@ def is_app_node(props):
     return str(props.get("node.name", "")).startswith(APP_NODE_PREFIXES)
 
 
+def _true(v):
+    return v is True or str(v).lower() in ("true", "1")
+
+
 def is_ae9(props):
     """A PipeWire node (or device) of the AE-9 itself, from its props."""
-    if is_app_node(props):
-        return False
+    if is_app_node(props) or _true(props.get("node.virtual")):
+        return False   # virtual nodes (echo-cancel, filter-chain, loopback) only borrow the name
     blob = " ".join(str(props.get(k, "")) for k in AE9_KEYS).lower()
     return "ae9" in blob or "ae-9" in blob
 
