@@ -5,7 +5,7 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## Unreleased
+## 0.3.0 (2026-11-06)
 
 Built on SbAe9-Kit, the base it now shares with Sound Blaster Command.
 
@@ -34,6 +34,8 @@ Built on SbAe9-Kit, the base it now shares with Sound Blaster Command.
   checks the vendored kit is unchanged, and that AudioMon never loads the
   kit's mixer (it stays listen-only).
 - The icon tool moved to SbAe9-Kit.
+- The repo is public. The icon artwork is no longer tracked; the icons in
+  `appicon/` are what the app uses.
 
 ## 0.2.1 (2026-11-06)
 
