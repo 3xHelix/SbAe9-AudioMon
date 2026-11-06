@@ -10,9 +10,9 @@ Linux). Both apps are built on one shared base,
 ## Screenshots
 
 <img src="docs/monitor.png" alt="Monitor page on a real AE-9">
-<sub>The Monitor page on a real AE-9, with VLC playing and a call app open. The
-output and What U Hear agree, so the card is playing what PipeWire sends it.
-The optical jack is dark.</sub>
+<sub>The Monitor page on a real AE-9, with VLC playing and the head unit's mic
+live. The output and What U Hear agree, so the card is playing what PipeWire
+sends it. The card's optical in jack is dark.</sub>
 
 <table>
   <tr>
@@ -75,10 +75,10 @@ SbAe9-AudioMon finds the AE-9's PipeWire nodes by name/card and wires a meter to
 
 | Meter | Source | Meter node |
 |-------|--------|-----------|
-| AE-9 Output (monitor) | the AE-9 sink's monitor ports (what PipeWire sends to the card) | `sbae9-audiomon.ae9.monitor` |
+| AE-9 Output (monitor) | the AE-9 sink's monitor ports: what PipeWire sends to the card (its RCA out in speaker mode, the head unit's headphone jacks in headphone mode) | `sbae9-audiomon.ae9.monitor` |
 | AE-9 What U Hear | `alsa_input.ae9_what_u_hear` (what the card actually plays, after its DSP) | `sbae9-audiomon.ae9.wuh` |
-| AE-9 Mic / Line In | the AE-9 analog source | `sbae9-audiomon.ae9.mic` |
-| AE-9 Optical In | `alsa_input.ae9_optical` (shows "no signal" without light on the jack) | `sbae9-audiomon.ae9.optical` |
+| AE-9 Head Unit Mic / Aux | the head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it (`alsa_input.pci-…analog-stereo`, hw:AE9,0) | `sbae9-audiomon.ae9.mic` |
+| AE-9 Optical In | the card's optical in jack, `alsa_input.ae9_optical` (shows "no signal" without light on the jack) | `sbae9-audiomon.ae9.optical` |
 | one per app stream | every app stream playing to the AE-9 sink, added/removed as they come and go | `sbae9-audiomon.stream.<id>` |
 
 Nodes are re-found and re-wired automatically when the card drops off and comes
@@ -98,7 +98,7 @@ suspending:
 
 - The output-monitor and app-stream meters are passive nodes (`node.passive`),
   so they only receive data while the card is running anyway.
-- What U Hear, Mic/Line and Optical have to actively capture, so they're only
+- What U Hear, the head unit's Mic / Aux and Optical In have to actively capture, so they're only
   wired while the AE-9 sink is `running`, and they're unwired as soon as it goes idle.
   This means nothing of ours holds an AE-9 PCM open while it idles or suspends.
 
@@ -107,7 +107,7 @@ That keeps the AE-9 running permanently.
 
 **Always capture inputs** (off by default, `--always-capture`) is a comparison
 mode. The output and app meters stay passive, so the sink can still suspend,
-but What U Hear, Mic and Optical stay wired all the time. That keeps the card's
+but What U Hear, the head unit's Mic / Aux and Optical In stay wired all the time. That keeps the card's
 capture converters and DMA running while playback is idle. Use it to check
 whether open captures change the bug's behaviour.
 

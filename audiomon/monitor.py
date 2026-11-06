@@ -49,7 +49,7 @@ FIXED_TAPS = (
     # when "let the AE-9 idle" is on, so we never hold its capture PCMs open)
     ("monitor", "AE-9 Output (monitor)", "sbae9-audiomon.ae9.monitor", False),
     ("wuh", "AE-9 What U Hear", "sbae9-audiomon.ae9.wuh", True),
-    ("mic", "AE-9 Mic / Line In", "sbae9-audiomon.ae9.mic", True),
+    ("mic", "AE-9 Head Unit Mic / Aux", "sbae9-audiomon.ae9.mic", True),
     ("optical", "AE-9 Optical In", "sbae9-audiomon.ae9.optical", True),
 )
 

@@ -41,6 +41,9 @@ from . import fixture_path, scaled
 SINK = "alsa_output.pci-0000_06_00.0.analog-stereo"
 MIC = "alsa_input.pci-0000_06_00.0.analog-stereo"
 WHAT_U_HEAR = "alsa_input.ae9_what_u_hear"
+# The driver's desktop name for the head unit's input: the XLR/TRS jack and the
+# 3.5 mm mic jack share it (config/61-ae9-names.conf). The snapshot predates it.
+MIC_DESC = "AE-9 Head Unit Mic / Aux"
 OPTICAL = "alsa_input.ae9_optical"
 WUH_OFFSET_DB = 0.0           # What U Hear is level-exact against the source (a -20 dBFS
                               # peak sine reads -20 peak / -23 RMS, as at the output)
@@ -59,7 +62,7 @@ class FakePipeWire:
         self.handlers = {}            # prog -> fn(*args) -> str, for commands an app adds
         self.streams = {}             # app stream node id -> level dBFS
         self.silent_restart = False   # What U Hear runs but delivers silence (the bug)
-        self.mic_db = None            # level on Mic / Line In (None = silence)
+        self.mic_db = None            # level on the head unit's Mic / Aux input (None = silence)
         self.optical_db = None        # level on a lit Optical In (None = no light: silence)
         self.jitter = 0.0             # +/- dB of random wobble on every level (demos)
         self.suspend_after = scaled(REAL_SUSPEND_AFTER)
@@ -106,7 +109,9 @@ class FakePipeWire:
         for o in snapshot:
             if o.get("type") != "PipeWire:Interface:Node":
                 continue
-            props = o["info"]["props"]
+            props = dict(o["info"]["props"])
+            if props.get("node.name") == MIC:
+                props["node.description"] = MIC_DESC   # as the driver's names config sets it
             nid = self._node(props)
             self._card_nodes.append(nid)
             if props.get("media.class") == "Audio/Sink":

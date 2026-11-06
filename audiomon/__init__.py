@@ -6,7 +6,8 @@ or touches the card's mixer (so it never imports sbae9kit.mixer).
 Two modes:
 
 * AE-9 mode (default): finds the AE-9 nodes and wires meters to its output
-  monitor, What U Hear loopback, Mic/Line In, Optical In and every app stream
+  monitor, What U Hear loopback, the head unit's Mic / Aux input, the card's
+  Optical In and every app stream
   playing to it. Flags "SILENT" dropouts and keeps a timestamped debug log.
 * Manual meters: two meters with 2/4/6/8 unlinked input ports, to wire by hand
   with Helvum, qpwgraph, pw-link...

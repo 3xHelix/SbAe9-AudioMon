@@ -179,7 +179,7 @@ class CardComesAndGoes(MonitorTest):
         self.pw.card_present(False)
         self.assertTrue(wait_until(lambda: self.view.fixed["wuh"].note == "not found"))
         log = self.log_text()
-        for title in ("AE-9 Output (monitor)", "AE-9 What U Hear", "AE-9 Mic / Line In"):
+        for title in ("AE-9 Output (monitor)", "AE-9 What U Hear", "AE-9 Head Unit Mic / Aux"):
             self.assertIn(f"{title}: disappeared", log)
         self.assertEqual(self.win.state_lbl.text(), "Not found")
 

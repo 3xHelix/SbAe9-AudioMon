@@ -22,6 +22,14 @@ Blaster AE-9. A debugging companion to
   earlier -3.1 dB came from misreading a sine's RMS as an offset; the real
   card is level-exact, and AudioMon measured it within 0.1-0.3 dB.
 
+### Changed
+
+- The mic meter is now "AE-9 Head Unit Mic / Aux" (was "Mic / Line In"): it's
+  the head unit's XLR/TRS and 3.5 mm mic jacks, which share one input. Names now
+  say where each jack lives (the head unit or the card). The fake AE-9 (kit
+  0.3.3) uses the driver's new name too. Node names are unchanged.
+- The README's real-card screenshot is retaken with the new name.
+
 ## 0.3.0 (2026-11-06)
 
 Built on SbAe9-Kit, the base it now shares with Sound Blaster Command.

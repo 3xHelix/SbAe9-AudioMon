@@ -136,19 +136,19 @@ class SettingsPage(Page):
         self.body.addWidget(label("Monitoring", "sectionTitle"))
         self.auto_cb = check(
             "Auto-wire AE-9",
-            "Meter the AE-9 output monitor, What U Hear, Mic / Line In, Optical In and every "
+            "Meter the AE-9 output monitor, What U Hear, the head unit's Mic / Aux, the card's Optical In and every "
             "app stream playing to the AE-9. Listen-only: never changes defaults, moves "
             "streams or touches mixer controls.",
             cfg["mode"] == "ae9", win.set_auto)
         self.idle_cb = check(
             "Let the AE-9 idle",
             "Meters never keep the card awake. The output and app meters are passive, and "
-            "What U Hear / Mic / Optical are only wired while the AE-9 sink is running. "
+            "What U Hear / Head Unit Mic / Optical In are only wired while the AE-9 sink is running. "
             "Off: everything stays wired and the AE-9 never suspends.",
             cfg["let_idle"], win.set_let_idle)
         self.capture_cb = check(
             "Always capture inputs",
-            "Comparison mode: keep What U Hear / Mic / Optical wired while the card idles "
+            "Comparison mode: keep What U Hear / Head Unit Mic / Optical In wired while the card idles "
             "(their capture converters and DMA stay running). The sink can still suspend.",
             cfg["always_capture"], win.set_always_capture)
 
