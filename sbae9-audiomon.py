@@ -32,18 +32,20 @@ from functools import lru_cache
 from types import SimpleNamespace
 
 import numpy as np
-from PySide6.QtCore import QByteArray, QPointF, QRectF, QSignalBlocker, QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import (
+    QByteArray, QLibraryInfo, QPointF, QProcess, QRectF, QSignalBlocker, QSize, Qt, QTimer, QUrl,
+)
 from PySide6.QtGui import (
-    QColor, QDesktopServices, QFont, QFontDatabase, QIcon, QPainter, QPen, QPixmap,
+    QColor, QGuiApplication, QDesktopServices, QFont, QFontDatabase, QIcon, QPainter, QPen, QPixmap,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit,
-    QPushButton, QRadioButton, QScrollArea, QSizePolicy, QStackedWidget, QToolButton,
+    QPushButton, QRadioButton, QScrollArea, QSizePolicy, QSlider, QStackedWidget, QToolButton,
     QVBoxLayout, QWidget,
 )
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 RATE = 48000
 BLOCK = 512  # frames per read / node latency
 CHANNEL_CHOICES = [2, 4, 6, 8]
@@ -79,6 +81,8 @@ DEFAULT_CONFIG = {
     "let_idle": True,     # AE-9 mode: don't keep the card awake
     "always_capture": False,  # AE-9 mode + let_idle: keep What U Hear/Mic/Optical wired anyway
     "frameless": True,    # draw our own title bar, like Sound Blaster Command
+    "glass": False,       # see-through, frosted backgrounds (SBC's Glass)
+    "glass_opacity": 70,  # percent, 30-95
     "page": 0,            # last page shown
     "meters": [
         {"name": "sbae9-audiomon.in", "label": "AudioMon In", "channels": 2},
@@ -164,11 +168,13 @@ def load_config():
             cfg["meters"][i].update({k: v for k, v in m.items() if k in ("name", "label", "channels")})
         if user.get("mode") in ("ae9", "manual"):
             cfg["mode"] = user["mode"]
-        for k in ("let_idle", "always_capture", "frameless"):
+        for k in ("let_idle", "always_capture", "frameless", "glass"):
             if isinstance(user.get(k), bool):
                 cfg[k] = user[k]
         if isinstance(user.get("page"), int):
             cfg["page"] = user["page"]
+        if isinstance(user.get("glass_opacity"), int):
+            cfg["glass_opacity"] = user["glass_opacity"]
     except (OSError, ValueError):
         pass
     for m in cfg["meters"]:
@@ -584,6 +590,39 @@ class T:
     OVERLAY, SHADE, HANDLE = "#ffffff", "#000000", "#f2f2f6"
 
 
+# Glass, from SbAe9-SBC: the window's backgrounds (title and bottom bars,
+# sidebar, pages, meter panels) go see-through; text and controls stay solid.
+# KDE frosts what's behind when the app runs through XWayland (see
+# use_xwayland and blur_behind).
+GLASS = False
+GLASS_OPACITY = 0.70          # how solid the glass is (0.3 - 0.95)
+GLASS_RANGE = (30, 95)        # percent, for the Settings slider
+
+
+def clamp_glass(pct):
+    try:
+        pct = int(round(int(pct) / 5) * 5)
+    except (TypeError, ValueError):
+        return 70
+    return max(GLASS_RANGE[0], min(GLASS_RANGE[1], pct))
+
+
+def surface(hex_color, depth=1.0):
+    """A window background colour: as is, or see-through with Glass on.
+    depth < 1 makes that surface a little clearer than the others."""
+    if not GLASS:
+        return hex_color
+    return rgba(hex_color, round(max(0.0, min(1.0, GLASS_OPACITY * depth)), 3))
+
+
+def surface_q(hex_color, depth=1.0):
+    """surface() as a QColor, for widgets that paint their own background."""
+    c = QColor(hex_color)
+    if GLASS:
+        c.setAlphaF(max(0.0, min(1.0, GLASS_OPACITY * depth)))
+    return c
+
+
 FONT_FAMILIES = ["Roboto Condensed", "Barlow Semi Condensed", "Noto Sans", "DejaVu Sans Condensed"]
 
 
@@ -685,17 +724,23 @@ def stylesheet():
             icon_pixmap(name, color, 16, 2.0).save(path)
         img[name] = path
     fams = ", ".join(f'"{f}"' for f in FONT_FAMILIES)
+    # thin light edges where glass panes meet, like light catching an edge
+    edge = rgba(T.OVERLAY, 0.14)
+    edge_bottom = f" border-bottom: 1px solid {edge};" if GLASS else ""
+    edge_top = f" border-top: 1px solid {edge};" if GLASS else ""
+    edge_right = f" border-right: 1px solid {edge};" if GLASS else ""
     return f"""
 * {{ font-family: {fams}, sans-serif; color: {T.TEXT}; font-size: 14px; }}
-#root {{ background: {T.MAIN_TOP}; }}
-#titleBar {{ background: {T.TITLE_BG}; }}
+#root {{ background: {"transparent" if GLASS else T.MAIN_TOP}; }}
+#titleBar {{ background: {surface(T.TITLE_BG)};{edge_bottom} }}
 #winButton, #winClose {{ background: transparent; border: none; border-radius: 3px; }}
 #winButton:hover {{ background: {rgba(T.OVERLAY, 0.10)}; }}
 #winClose:hover {{ background: {T.DANGER}; }}
 #appTitle {{ font-size: 16px; color: {T.TEXT}; }}
 #deviceName {{ font-size: 17px; font-weight: 700; color: {T.ACCENT}; }}
 #sidebar {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {T.SIDEBAR_TOP}, stop:1 {T.SIDEBAR_BOTTOM});
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {surface(T.SIDEBAR_TOP)},
+                                stop:1 {surface(T.SIDEBAR_BOTTOM)});{edge_right}
 }}
 #sidebar QPushButton {{
     background: transparent; border: none; border-left: 3px solid transparent; border-radius: 0;
@@ -708,9 +753,10 @@ def stylesheet():
 #sideCaption {{ color: {T.MUTED}; font-size: 13px; padding-left: 18px; }}
 #sep {{ background: {rgba(T.OVERLAY, 0.13)}; max-height: 1px; min-height: 1px; margin: 4px 10px; }}
 #content {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {T.MAIN_TOP}, stop:1 {T.MAIN_BOTTOM});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {surface(T.MAIN_TOP, 0.85)},
+                                stop:1 {surface(T.MAIN_BOTTOM, 0.85)});
 }}
-#bottomBar {{ background: {T.BOTTOM_BG}; }}
+#bottomBar {{ background: {surface(T.BOTTOM_BG)};{edge_top} }}
 #pageTitle {{ font-size: 23px; font-weight: 700; }}
 #sectionTitle {{ font-size: 15px; font-weight: 700; }}
 #cardTitle {{ font-size: 15px; font-weight: 700; }}
@@ -760,6 +806,13 @@ QCheckBox::indicator:checked {{ background: {T.ACCENT}; border-color: {T.ACCENT}
 QPlainTextEdit {{
     background: {rgba(T.SHADE, 0.18)}; border: none; border-radius: 6px; padding: 6px;
     color: {T.GRAPH_TEXT}; selection-background-color: {T.ACCENT}; selection-color: {T.ACCENT_TEXT};
+}}
+QSlider::groove:horizontal {{ height: 5px; background: {T.TRACK}; border-radius: 2px; }}
+QSlider::sub-page:horizontal {{ background: {T.ACCENT}; border-radius: 2px; }}
+QSlider::sub-page:horizontal:disabled {{ background: {T.DIM}; }}
+QSlider::handle:horizontal {{
+    background: {T.HANDLE}; border: 1px solid {T.HANDLE};
+    width: 14px; height: 14px; margin: -6px 0; border-radius: 8px;
 }}
 QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
 QScrollBar:vertical, QScrollBar:horizontal {{ background: transparent; width: 10px; height: 10px; }}
@@ -868,7 +921,7 @@ class MeterWidget(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(qcolor(T.GRAPH_BG))
+        p.setBrush(surface_q(T.GRAPH_BG, 0.85))
         p.drawRoundedRect(QRectF(0, 0, w, h), 6, 6)
         if self.panel.alert:
             p.setBrush(qcolor(T.DANGER, 0.22))
@@ -1557,6 +1610,31 @@ class SettingsPage(Page):
             "Use the desktop's title bar",
             "Off: the app draws its own title bar, like Sound Blaster Command.",
             not cfg["frameless"], lambda on: win.set_frameless(not on))
+        self.glass_cb = check(
+            "Glass",
+            "See-through backgrounds, like Sound Blaster Command's Glass; text, meters and "
+            "controls stay solid. On KDE, what's behind is frosted (the app runs through "
+            "XWayland for that). Switching Glass on or off reopens the window, which restarts "
+            "monitoring for about a second (logged).",
+            cfg["glass"], win.set_glass)
+        row = QHBoxLayout()
+        row.setContentsMargins(30, 0, 0, 6)
+        row.setSpacing(12)
+        row.addWidget(QLabel("Opacity"))
+        self.opacity = QSlider(Qt.Orientation.Horizontal)
+        self.opacity.setRange(*GLASS_RANGE)
+        self.opacity.setSingleStep(5)
+        self.opacity.setPageStep(10)
+        self.opacity.setFixedWidth(220)
+        self.opacity.setValue(clamp_glass(cfg["glass_opacity"]))
+        self.opacity.valueChanged.connect(self._opacity_moved)
+        self.opacity.sliderReleased.connect(lambda: win.set_glass_opacity(self.opacity.value()))
+        row.addWidget(self.opacity)
+        self.opacity_lbl = label(f"{self.opacity.value()}%", "bigValue")
+        self.opacity_lbl.setMinimumWidth(50)
+        row.addWidget(self.opacity_lbl)
+        row.addStretch(1)
+        self.body.addLayout(row)
 
         self.body.addSpacing(6)
         self.body.addWidget(label("Device", "sectionTitle"))
@@ -1566,7 +1644,17 @@ class SettingsPage(Page):
         self.body.addStretch(1)
         self.sync()
 
+    def _opacity_moved(self, v):
+        snapped = clamp_glass(v)
+        if snapped != v:
+            self.opacity.setValue(snapped)
+            return
+        self.opacity_lbl.setText(f"{v}%")
+        if not self.opacity.isSliderDown():   # keyboard / wheel: apply now
+            self.win.set_glass_opacity(v)
+
     def sync(self):
+        self.opacity.setEnabled(self.win.cfg["glass"])
         on = self.win.cfg["mode"] == "ae9"
         self.idle_cb.setEnabled(on)
         self.capture_cb.setEnabled(on and self.win.cfg["let_idle"])
@@ -1685,6 +1773,39 @@ class StatusDot(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(self.color))
         p.drawEllipse(QRectF(2, 2, 12, 12))
+
+
+def blur_behind(win):
+    """Ask KDE to blur what's behind a glass window. Works for X11 windows
+    (the app runs through XWayland with Glass on); elsewhere it's a no-op
+    and the glass is just clear."""
+    if QGuiApplication.platformName() != "xcb" or not shutil.which("xprop"):
+        return False
+    # an empty region (a single 0) means "the whole window" to KWin
+    prop = "_KDE_NET_WM_BLUR_BEHIND_REGION"
+    return QProcess.startDetached("xprop", ["-id", str(int(win.winId())),
+                                           "-f", prop, "32c", "-set", prop, "0"])[0]
+
+
+# KDE only blurs behind X11 windows for apps without KDE's own libraries, so
+# with Glass on the app runs through XWayland. Otherwise it stays native
+# Wayland. A QT_QPA_PLATFORM the user set is left alone.
+QPA_MARK = "SBAE9_AUDIOMON_SET_QPA"
+
+
+def xcb_available():
+    plugins = QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)
+    return os.path.exists(os.path.join(plugins, "platforms", "libqxcb.so"))
+
+
+def use_xwayland(glass, env=os.environ):
+    if env.pop(QPA_MARK, None):              # set by us on an earlier launch
+        env.pop("QT_QPA_PLATFORM", None)
+    wayland = env.get("WAYLAND_DISPLAY") or env.get("XDG_SESSION_TYPE") == "wayland"
+    if (glass and wayland and env.get("DISPLAY") and "QT_QPA_PLATFORM" not in env
+            and xcb_available()):
+        env["QT_QPA_PLATFORM"] = "xcb"
+        env[QPA_MARK] = "1"
 
 
 NAV = (("Monitor", "wave"), ("Event Log", "log"), None, ("Manual Meters", "mixer"))
@@ -1807,6 +1928,10 @@ class MainWindow(QWidget):
         bl.addWidget(self.dropouts_lbl)
         v.addWidget(bottom)
 
+        if GLASS:
+            # see-through backgrounds; must be set before the window is created
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.restart = None          # set by main(): reopen the app (for Glass on/off)
         self.grips = [EdgeGrip(edges, self) for edges in EdgeGrip.CURSORS]
         self.frameless = False
         self.set_frameless(cfg["frameless"], save=False)
@@ -1894,6 +2019,34 @@ class MainWindow(QWidget):
         if was_visible:
             self.show()
 
+    def showEvent(self, e):
+        super().showEvent(e)
+        if GLASS:
+            blur_behind(self)
+
+    def set_glass(self, on):
+        if self.cfg["glass"] == on:
+            return
+        self.cfg["glass"] = on
+        save_config(self.cfg)
+        self.settings.sync()
+        if self.restart:
+            self.log(f"Glass turned {'on' if on else 'off'}; reopening the window "
+                     "(monitoring restarts)")
+            self.restart()
+
+    def set_glass_opacity(self, pct):
+        global GLASS_OPACITY
+        pct = clamp_glass(pct)
+        if self.cfg["glass_opacity"] == pct and GLASS_OPACITY == pct / 100:
+            return
+        self.cfg["glass_opacity"] = pct
+        save_config(self.cfg)
+        GLASS_OPACITY = pct / 100
+        QApplication.instance().setStyleSheet(stylesheet())
+        for w in [self] + self.findChildren(QWidget):
+            w.update()
+
     def resizeEvent(self, e):
         for g in self.grips:
             g.place()
@@ -1945,6 +2098,9 @@ class MainWindow(QWidget):
         self.manual.tick(now, dt)
 
     def stop(self):
+        if getattr(self, "_stopped", False):
+            return
+        self._stopped = True
         self.monitor.stop()
         self.manual.stop()
 
@@ -1966,6 +2122,8 @@ def main():
                     help="manual mode: channel count for both meters")
     ap.add_argument("--frame", action=argparse.BooleanOptionalAction, default=None,
                     help="use the desktop's title bar instead of our own")
+    ap.add_argument("--glass", action=argparse.BooleanOptionalAction, default=None,
+                    help="see-through, frosted backgrounds (saved)")
     ap.add_argument("--log", default=LOG_PATH, help=f"debug log file (default {LOG_PATH})")
     args, qt_args = ap.parse_known_args()
 
@@ -1976,6 +2134,9 @@ def main():
         cfg["let_idle"] = args.let_idle
     if args.frame is not None:
         cfg["frameless"] = not args.frame
+    if args.glass is not None:
+        cfg["glass"] = args.glass
+        save_config(cfg)
     if args.manual:
         cfg["page"] = 2   # open on Manual Meters
     if args.always_capture is not None:
@@ -1983,6 +2144,11 @@ def main():
     if args.channels:
         for m in cfg["meters"]:
             m["channels"] = args.channels
+
+    global GLASS, GLASS_OPACITY
+    GLASS = bool(cfg["glass"])
+    GLASS_OPACITY = clamp_glass(cfg["glass_opacity"]) / 100
+    use_xwayland(GLASS)               # must run before QApplication exists
 
     app = QApplication([sys.argv[0]] + qt_args)
     app.setApplicationName("SbAe9-AudioMon")
@@ -1992,6 +2158,17 @@ def main():
 
     win = MainWindow(cfg, EventLog(args.log))
     app.aboutToQuit.connect(win.stop)
+
+    def restart():
+        """Reopen the app (Glass on/off): stop our meters first so the new copy
+        doesn't meet our nodes, start it, then quit. --glass/--no-glass on
+        the original command line are dropped so the saved choice wins."""
+        win.stop()
+        argv = [a for a in sys.orig_argv[1:] if a not in ("--glass", "--no-glass")]
+        if QProcess.startDetached(sys.executable, argv)[0]:
+            app.quit()
+
+    win.restart = restart
     # The 33 ms meter timer hands control back to Python regularly, so
     # these handlers run promptly even while Qt's event loop is in charge.
     for sig in (signal.SIGINT, signal.SIGTERM):

@@ -14,6 +14,12 @@ Linux) in its Helix palette.
   - **Event Log:** the full debug log, with a button to open the log file.
   - **Manual Meters:** two meters you wire by hand.
   - **Settings:** monitoring options, the title bar choice, and driver/log/config info.
+- **Glass** (Settings → Window, or `--glass`): see-through backgrounds, the
+  same as Sound Blaster Command's Glass. Text, meters and controls stay solid.
+  An Opacity slider (30–95%) works live. On KDE what's behind is frosted;
+  the app runs through XWayland for that, since KDE only blurs X11 windows.
+  Switching Glass on or off reopens the window, which restarts monitoring for
+  about a second, and the debug log says so.
 - **Bottom bar:**
   - a status dot: green = running, amber = idle, grey = suspended, red = SILENT or card missing;
   - the AE-9 sink state;
@@ -169,6 +175,8 @@ Saved to `~/.config/sbae9-audiomon/config.json`:
   "let_idle": true,
   "always_capture": false,
   "frameless": true,
+  "glass": false,
+  "glass_opacity": 70,
   "page": 0,
   "meters": [
     {"name": "sbae9-audiomon.in",  "label": "AudioMon In",  "channels": 2},

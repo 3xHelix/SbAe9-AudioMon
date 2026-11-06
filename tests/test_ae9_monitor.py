@@ -50,7 +50,7 @@ class MonitorTest(unittest.TestCase):
         self.pw = F.reset(**self.card)
         self.cfg = am.load_config()
         self.cfg.update(mode="ae9", let_idle=self.let_idle, always_capture=self.always_capture,
-                        page=0, frameless=False)
+                        page=0, frameless=False, glass=False, glass_opacity=70)
         self.log_path = os.path.join(os.environ["XDG_STATE_HOME"], f"{self.id()}.log")
         self.win = am.MainWindow(self.cfg, am.EventLog(self.log_path))
         self.win.show()
@@ -248,6 +248,54 @@ class QuickToggles(MonitorTest):
         self.assertFalse(self.win.q_capture.isEnabled())
         self.win.go(3)
         self.assertFalse(self.win.quick.isVisibleTo(self.win))
+
+
+class Glass(MonitorTest):
+    def tearDown(self):
+        super().tearDown()
+        am.GLASS = False
+        am.GLASS_OPACITY = 0.70
+        app.setStyleSheet("")
+
+    def test_xwayland_only_for_glass_on_wayland(self):
+        env = {"WAYLAND_DISPLAY": "wayland-1", "DISPLAY": ":0"}
+        am.use_xwayland(False, env)
+        self.assertNotIn("QT_QPA_PLATFORM", env)
+        am.use_xwayland(True, env)
+        self.assertEqual(env.get("QT_QPA_PLATFORM"), "xcb" if am.xcb_available() else None)
+        am.use_xwayland(False, env)            # the next launch, Glass off: back to Wayland
+        self.assertNotIn("QT_QPA_PLATFORM", env)
+        mine = {"WAYLAND_DISPLAY": "wayland-1", "DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland"}
+        am.use_xwayland(True, mine)            # one the user set is left alone
+        self.assertEqual(mine["QT_QPA_PLATFORM"], "wayland")
+        x11 = {"DISPLAY": ":0"}
+        am.use_xwayland(True, x11)             # plain X11 session: nothing to do
+        self.assertNotIn("QT_QPA_PLATFORM", x11)
+
+    def test_surfaces_go_see_through_and_opacity_is_live(self):
+        self.assertNotIn("rgba(18,15,33", am.stylesheet())   # title bar solid without Glass
+        am.GLASS = True
+        am.GLASS_OPACITY = 0.7
+        self.assertIn("#titleBar { background: rgba(18,15,33,0.7);", am.stylesheet())
+        self.assertIn("#root { background: transparent; }", am.stylesheet())
+        self.assertAlmostEqual(am.surface_q(am.T.GRAPH_BG, 0.85).alphaF(), 0.595, places=2)
+        self.cfg["glass"] = True
+        self.win.settings.sync()
+        self.win.settings.opacity.setValue(50)       # keyboard-style change applies at once
+        self.assertEqual(self.cfg["glass_opacity"], 50)
+        self.assertEqual(am.GLASS_OPACITY, 0.5)
+        self.assertIn("rgba(18,15,33,0.5)", app.styleSheet())
+        self.assertEqual(self.win.settings.opacity_lbl.text(), "50%")
+
+    def test_toggling_glass_reopens_the_app(self):
+        calls = []
+        self.win.restart = lambda: calls.append(1)
+        self.assertFalse(self.win.settings.opacity.isEnabled())
+        self.win.settings.glass_cb.click()
+        self.assertEqual(calls, [1])
+        self.assertTrue(self.cfg["glass"])
+        self.assertTrue(self.win.settings.opacity.isEnabled())
+        self.assertIn("Glass turned on; reopening the window", self.log_text())
 
 
 if __name__ == "__main__":

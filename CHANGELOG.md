@@ -5,6 +5,16 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.2.0 (2026-11-06)
+
+### Added
+
+- **Glass**, from Sound Blaster Command: see-through, frosted backgrounds with
+  an Opacity slider (30–95%, live) in Settings → Window, or `--glass`. On KDE
+  the app runs through XWayland so KWin can blur what's behind the window.
+  Switching Glass on or off reopens the window, and the debug log notes the
+  brief monitoring restart.
+
 ## 0.1.0 (2026-11-06)
 
 First release. It watches what goes into the AE-9 and what actually comes out
