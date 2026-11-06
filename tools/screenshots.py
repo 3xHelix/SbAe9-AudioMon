@@ -3,7 +3,7 @@
 """Render the README screenshots into docs/ (2x, HiDPI), like Sound Blaster
 Command's tools/screenshots.py.
 
-    python3 tools/screenshots.py [--palette helix] [--glass BACKDROP.png] [--out docs]
+    python3 tools/screenshots.py [--palette helix] [--glass [BACKDROP.png]] [--out docs]
 
 Runs the real window on the fake AE-9 (sbae9kit.testing via tests/support.py),
 so no real card, PipeWire, settings or debug log are touched:
@@ -14,9 +14,9 @@ so no real card, PipeWire, settings or debug log are touched:
     settings    the Settings page
     manual      Manual Meters with the music wired in by hand
 
---glass BACKDROP also renders docs/glass-monitor.png: Glass at 70% over the
-backdrop, blurred the way KDE frosts it (an offscreen approximation; on the
-desktop KWin does the blur).
+--glass also renders docs/glass-monitor.png: Glass at 70% over a built-in
+neon backdrop (or BACKDROP), blurred the way KDE frosts it (an offscreen
+approximation; on the desktop KWin does the blur).
 """
 
 import argparse
@@ -38,7 +38,8 @@ SHOWN_DRIVER = "snd_hda_codec_creative_ae9 0.9.2 srcversion E10B8D135D072FD24315
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--palette", default="helix")
-    ap.add_argument("--glass", metavar="BACKDROP", help="also render docs/glass-monitor.png over this image")
+    ap.add_argument("--glass", nargs="?", const="", metavar="BACKDROP",
+                    help="also render docs/glass-monitor.png, over BACKDROP or a built-in neon backdrop")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -138,7 +139,7 @@ def main():
     shot(w, "manual")
     close(w)
 
-    if args.glass:
+    if args.glass is not None:
         glass_shot(args, make_window, run, shot, close)
     print("saved to", args.out)
 
@@ -158,7 +159,7 @@ def glass_shot(args, make_window, run, shot, close):
     win = Image.open(tmp).convert("RGBA")
     pad = 200                                   # 100 px of backdrop all round, at 2x
     size = (win.width + 2 * pad, win.height + 2 * pad)
-    back = Image.open(args.glass).convert("RGBA")
+    back = Image.open(args.glass).convert("RGBA") if args.glass else neon_backdrop()
     scale = max(size[0] / back.width, size[1] / back.height)
     back = back.resize((round(back.width * scale), round(back.height * scale)), Image.LANCZOS)
     left, top = (back.width - size[0]) // 2, (back.height - size[1]) // 2
@@ -168,7 +169,27 @@ def glass_shot(args, make_window, run, shot, close):
     out.paste(frost, (pad, pad))
     out.alpha_composite(win, (pad, pad))
     out.convert("RGB").save(tmp, optimize=True)
-    print(f"{tmp}  {out.width}x{out.height} (over {os.path.basename(args.glass)})")
+    print(f"{tmp}  {out.width}x{out.height} (over {os.path.basename(args.glass) or 'the neon backdrop'})")
+
+
+def neon_backdrop(w=3840, h=2400):
+    """Dark violet with soft coloured light in the Helix colours (the same
+    image every time), for the Glass screenshot."""
+    import random
+    from PIL import Image, ImageDraw, ImageFilter
+    rnd = random.Random(7)
+    im = Image.new("RGB", (w, h), (14, 8, 30))
+    d = ImageDraw.Draw(im)
+    for color, n in (((120, 40, 200), 5), ((245, 122, 69), 4), ((93, 202, 168), 3),
+                     ((255, 182, 58), 2), ((220, 60, 140), 3)):
+        for _ in range(n):
+            x, y, r = rnd.randint(0, w), rnd.randint(0, h), rnd.randint(300, 800)
+            d.ellipse((x - r, y - r, x + r, y + r), fill=color)
+    for _ in range(40):          # sharper streaks, so the frost has something to blur
+        x, y = rnd.randint(0, w), rnd.randint(0, h)
+        d.line((x, y, x + rnd.randint(-900, 900), y + rnd.randint(-300, 300)),
+               fill=rnd.choice([(255, 182, 58), (93, 202, 168), (245, 122, 69)]), width=rnd.randint(6, 18))
+    return im.filter(ImageFilter.GaussianBlur(60)).convert("RGBA")
 
 
 if __name__ == "__main__":

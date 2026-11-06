@@ -33,7 +33,7 @@ dropout can be shown on demand. Regenerate them with
 palette, here Helix at 70%.
 
 <img src="docs/glass-monitor.png" alt="Monitor page in Glass mode">
-<sub>Rendered offscreen with `python3 tools/screenshots.py --glass BACKDROP.png`,
+<sub>Rendered offscreen with `python3 tools/screenshots.py --glass`,
 over a backdrop blurred the way KDE frosts it. On the desktop, KWin does the
 blur.</sub>
 
@@ -59,6 +59,9 @@ blur.</sub>
   the app runs through XWayland for that, since KDE only blurs X11 windows.
   Switching Glass on or off reopens the window, which restarts monitoring for
   about a second, and the debug log says so.
+- **Meter cards:** each shows a short name (Output, What U Hear, Mic / Aux,
+  Optical In) and its state. Hover the title for the full name, the jacks it
+  covers and its PipeWire node.
 - **Bottom bar:**
   - a status dot: green = running, amber = idle, grey = suspended, red = SILENT or card missing;
   - the AE-9 sink state;

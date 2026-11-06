@@ -115,6 +115,20 @@ class IdleCard(MonitorTest):
             self.assertFalse(self.view.fixed[key].capture.passive, key)
 
 
+class Captions(MonitorTest):
+    def test_short_names_on_screen_jacks_on_hover(self):
+        mic = self.view.fixed["mic"]
+        self.assertEqual(mic.title_lbl.text(), "Mic / Aux")
+        tip = mic.title_lbl.toolTip()
+        for detail in ("AE-9 Head Unit Mic / Aux", "XLR/TRS jack", "3.5 mm mic jack", "sbae9-audiomon.ae9.mic"):
+            self.assertIn(detail, tip)
+        self.assertIn("RCA out", self.view.fixed["monitor"].title_lbl.toolTip())
+        self.assertIn("optical in jack", self.view.fixed["optical"].title_lbl.toolTip())
+        self.assertEqual(mic.capture.label, "AE-9 Head Unit Mic / Aux")   # the node keeps the full name
+        # log lines keep the full names (they're matched against the kernel log)
+        self.assertIn("AE-9 Head Unit Mic / Aux: found", self.log_text())
+
+
 class Playback(MonitorTest):
     def test_stream_gets_a_meter_and_inputs_wire_while_running(self):
         sid = self.pw.add_stream("Firefox", "YouTube", -14)

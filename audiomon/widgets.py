@@ -205,10 +205,14 @@ class MeterPanel(QFrame):
     """A card: header (title, status, optional channel picker, reset) + meter."""
 
     def __init__(self, title, node_name, channels, subtitle=None, passive=False,
-                 on_channels=None, fit=None, tooltip=None):
+                 on_channels=None, fit=None, tooltip=None, node_label=None):
+        """title: the short name shown on the card; node_label: the full name
+        the meter's PipeWire node gets (Helvum shows it; defaults to title);
+        subtitle: an optional second line for state, e.g. what a stream plays;
+        tooltip: the detail (jacks, nodes) shown on hover."""
         super().__init__()
         self.setObjectName("card")
-        self.title_text = title
+        self.title_text = node_label or title
         self.node_name = node_name
         self.passive = passive
         self.on_channels = on_channels
@@ -221,12 +225,13 @@ class MeterPanel(QFrame):
         self.last_sound = 0.0       # last time anything above digital silence arrived
         self._status_html = None
 
-        sub = subtitle if subtitle is not None else node_name
         titles = QVBoxLayout()
         titles.setSpacing(0)
-        titles.addWidget(label(elide(title), "cardTitle"))
-        titles.addWidget(label(elide(sub, 34), "muted"))
-        tip = tooltip or f"{title}\n{sub}\nmeter node: {node_name}"
+        self.title_lbl = label(elide(title), "cardTitle")
+        titles.addWidget(self.title_lbl)
+        if subtitle:
+            titles.addWidget(label(elide(subtitle, 34), "muted"))
+        tip = tooltip or "\n".join(filter(None, (node_label or title, subtitle, f"meter node: {node_name}")))
         for i in range(titles.count()):
             titles.itemAt(i).widget().setToolTip(tip)
 

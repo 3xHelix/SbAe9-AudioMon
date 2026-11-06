@@ -45,13 +45,28 @@ class ManualView(QWidget):
 
 
 FIXED_TAPS = (
-    # key, title, meter node name, gated (only wired while the AE-9 sink runs
-    # when "let the AE-9 idle" is on, so we never hold its capture PCMs open)
+    # key, full title (log lines, the meter node's name), meter node name,
+    # gated (only wired while the AE-9 sink runs when "let the AE-9 idle" is on,
+    # so we never hold its capture PCMs open)
     ("monitor", "AE-9 Output (monitor)", "sbae9-audiomon.ae9.monitor", False),
     ("wuh", "AE-9 What U Hear", "sbae9-audiomon.ae9.wuh", True),
     ("mic", "AE-9 Head Unit Mic / Aux", "sbae9-audiomon.ae9.mic", True),
     ("optical", "AE-9 Optical In", "sbae9-audiomon.ae9.optical", True),
 )
+
+# On screen each meter shows a short name (and its state); where it is, jack by
+# jack, is on hover.
+SHORT_NAMES = {"monitor": "Output", "wuh": "What U Hear", "mic": "Mic / Aux", "optical": "Optical In"}
+DETAILS = {
+    "monitor": "What PipeWire sends to the AE-9: the card's RCA out in speaker mode, or the "
+               "head unit's headphone jacks (3.5 mm and 1/4\") in headphone mode.",
+    "wuh": "What the card actually plays, after its DSP (the card's What U Hear loopback, "
+           "alsa_input.ae9_what_u_hear).",
+    "mic": "The head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it "
+           "(alsa_input.pci-…analog-stereo).",
+    "optical": "The card's optical in jack (alsa_input.ae9_optical). With no light on the jack "
+               "it reads \"no signal\".",
+}
 
 
 class SilenceDetector:
@@ -138,7 +153,9 @@ class AE9View(QWidget):
         self.fixed = {}
         for key, title, node_name, _gated in FIXED_TAPS:
             passive = self.let_idle and key == "monitor"
-            p = MeterPanel(title, node_name, 2, passive=passive, fit=win.fit_window)
+            p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive, fit=win.fit_window,
+                           node_label=title,
+                           tooltip=f"{title}\n{DETAILS[key]}\nmeter node: {node_name}")
             p.note = "searching…"
             self.fixed[key] = p
             row.addWidget(p)

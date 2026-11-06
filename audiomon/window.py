@@ -97,7 +97,7 @@ class ManualPage(Page):
         self.win = win
         self.view = None
         self.body.addWidget(label(
-            "Two meters with unlinked input ports. Wire anything into them with Helvum, "
+            "Two meters with unlinked input ports (sbae9-audiomon.in and .out). Wire anything into them with Helvum, "
             "qpwgraph or pw-link. They run alongside the AE-9 monitor.", "hint", wrap=True))
         self.holder = QVBoxLayout()
         self.body.addLayout(self.holder, 1)
@@ -136,19 +136,19 @@ class SettingsPage(Page):
         self.body.addWidget(label("Monitoring", "sectionTitle"))
         self.auto_cb = check(
             "Auto-wire AE-9",
-            "Meter the AE-9 output monitor, What U Hear, the head unit's Mic / Aux, the card's Optical In and every "
+            "Meter the AE-9's output, What U Hear, Mic / Aux, Optical In and every "
             "app stream playing to the AE-9. Listen-only: never changes defaults, moves "
             "streams or touches mixer controls.",
             cfg["mode"] == "ae9", win.set_auto)
         self.idle_cb = check(
             "Let the AE-9 idle",
             "Meters never keep the card awake. The output and app meters are passive, and "
-            "What U Hear / Head Unit Mic / Optical In are only wired while the AE-9 sink is running. "
+            "What U Hear / Mic / Aux / Optical In are only wired while the AE-9 sink is running. "
             "Off: everything stays wired and the AE-9 never suspends.",
             cfg["let_idle"], win.set_let_idle)
         self.capture_cb = check(
             "Always capture inputs",
-            "Comparison mode: keep What U Hear / Head Unit Mic / Optical In wired while the card idles "
+            "Comparison mode: keep What U Hear / Mic / Aux / Optical In wired while the card idles "
             "(their capture converters and DMA stay running). The sink can still suspend.",
             cfg["always_capture"], win.set_always_capture)
 

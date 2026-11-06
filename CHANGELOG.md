@@ -5,6 +5,18 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.3.2 (2026-11-06)
+
+Short names on screen, the detail on hover, as in Sound Blaster Command 0.9.1.
+
+### Changed
+
+- The meter cards show short names (Output, What U Hear, Mic / Aux, Optical In)
+  and their state. Hover a card's title for the full name, the jacks it covers
+  and its PipeWire node, as Sound Blaster Command does. The second line with the
+  node name is gone. The meters' nodes and the debug log keep their full names.
+- Settings' hints use the short names too.
+
 ## 0.3.1 (2026-11-06)
 
 The head unit's input gets its real name, and the README gets screenshots.
