@@ -5,7 +5,10 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## Unreleased
+## 0.3.1 (2026-11-06)
+
+The head unit's input gets its real name, and the README gets screenshots.
+On SbAe9-Kit 0.3.4.
 
 ### Added
 
