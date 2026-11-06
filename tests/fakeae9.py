@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Fake AE-9 test rig: a fake PipeWire graph with a fake Sound Blaster AE-9,
 fake meters and a fake pw-link, so SbAe9-AudioMon can be tested (or watched)
 without touching the real card, the real PipeWire or the user's files.

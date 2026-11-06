@@ -176,3 +176,8 @@ Saved to `~/.config/sbae9-audiomon/config.json`:
   ]
 }
 ```
+
+## License
+
+GPL-2.0-only, same as [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC), whose Helix
+styling, test snapshot and icon tool it shares. See [LICENSE](LICENSE).

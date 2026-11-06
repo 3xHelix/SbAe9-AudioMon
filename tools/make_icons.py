@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """Make the app icon PNGs (appicon/sbae9-audiomon-<size>.png) from the artwork.
 
     python3 tools/make_icons.py "Neon VU Meter Diagnostics.png"

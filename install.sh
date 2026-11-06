@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Installs SbAe9-AudioMon for the current user: the `sbae9-audiomon` command,
 # its icon and a menu entry. Re-run after changing the app to update the
 # installed copy (it's a copy, so the installed one only changes when you do).

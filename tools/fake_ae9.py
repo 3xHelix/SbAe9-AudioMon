@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """Run SbAe9-AudioMon on the fake AE-9 and play a scenario on a loop, so you
 can watch how it behaves without the card (or without risking a test run).
 

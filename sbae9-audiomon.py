@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """SbAe9-AudioMon - lightweight PipeWire VU meters (Qt / PySide6).
 
 Two modes:
@@ -42,6 +43,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+VERSION = "0.1.0"
 RATE = 48000
 BLOCK = 512  # frames per read / node latency
 CHANNEL_CHOICES = [2, 4, 6, 8]
@@ -1220,7 +1222,7 @@ class AE9View(QWidget):
         layout.addWidget(self.logview)
         self.log.add_view(self.logview)
 
-        self.log(f"SbAe9-AudioMon AE-9 mode started (let the AE-9 idle: "
+        self.log(f"SbAe9-AudioMon {VERSION} AE-9 mode started (let the AE-9 idle: "
                  f"{'on' if self.let_idle else 'off'}, always capture inputs: "
                  f"{'on' if self.always_capture else 'off'}) | {driver_info()}")
 
@@ -1571,6 +1573,7 @@ class SettingsPage(Page):
 
     def showEvent(self, e):
         self.info.setText(
+            f"SbAe9-AudioMon {VERSION}<br>"
             f"Driver: {driver_info()}<br>"
             f"SILENT: output monitor above {MON_SIGNAL_DB:.0f} dBFS while What U Hear stays below "
             f"{WUH_SILENT_DB:.0f} dBFS for over {SILENT_AFTER} s ({WIRE_GRACE:.0f} s grace after "
@@ -1948,6 +1951,7 @@ class MainWindow(QWidget):
 
 def main():
     ap = argparse.ArgumentParser(description="PipeWire VU meters, with an AE-9 debug mode.")
+    ap.add_argument("--version", action="version", version=f"SbAe9-AudioMon {VERSION}")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--ae9", action="store_true", help="AE-9 auto-wire mode (default)")
     mode.add_argument("--manual", action="store_true", help="two meters you wire by hand")

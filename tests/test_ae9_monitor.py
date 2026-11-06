@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 """SbAe9-AudioMon against the fake AE-9 (tests/fakeae9.py).
 
 Run: python3 -m unittest discover -s tests
