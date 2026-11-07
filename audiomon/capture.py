@@ -30,6 +30,10 @@ class Capture:
         self.last_data = 0.0
         self._stopping = False
         self._proc = None
+        self._ring = None           # recent samples, when keep_samples() asked for them
+        self._ring_pos = 0
+        self._ring_filled = 0
+        self._ring_time = 0.0
         self._clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -38,6 +42,34 @@ class Capture:
         self._peak = np.zeros(self.channels)
         self._sumsq = np.zeros(self.channels)
         self._frames = 0
+
+    def keep_samples(self, seconds):
+        """Also keep the last `seconds` of raw samples, for recent()."""
+        with self.lock:
+            self._ring = np.zeros((int(seconds * RATE), self.channels), dtype=np.float32)
+            self._ring_pos = self._ring_filled = 0
+
+    def recent(self, frames):
+        """(the newest `frames` samples as a frames x channels array, the
+        time the newest one arrived), or None until that many have come in."""
+        with self.lock:
+            ring = self._ring
+            if ring is None or frames > min(self._ring_filled, len(ring)):
+                return None
+            idx = (self._ring_pos - frames + np.arange(frames)) % len(ring)
+            return ring[idx], self._ring_time
+
+    def _keep(self, a):
+        ring = self._ring
+        if ring is None:
+            return
+        n = len(ring)
+        a = a[-n:]
+        idx = (self._ring_pos + np.arange(len(a))) % n
+        ring[idx] = a
+        self._ring_pos = (self._ring_pos + len(a)) % n
+        self._ring_filled += len(a)
+        self._ring_time = self.last_data
 
     def take(self):
         with self.lock:
@@ -99,6 +131,7 @@ class Capture:
                     self._sumsq += ss
                     self._frames += a.shape[0]
                     self.last_data = time.monotonic()
+                    self._keep(a)
             proc.wait()
             if not self._stopping:
                 self.error = "pw-record exited, restarting..."

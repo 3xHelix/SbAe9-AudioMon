@@ -24,10 +24,11 @@ APP_NODE_PREFIXES = ("sbae9-",)
 
 # The AE-9's extra capture devices. Each is its own PipeWire source, made
 # by an optional drop-in from the driver (config/ae9-optical-in.conf,
-# config/ae9-what-u-hear.conf).
+# config/ae9-what-u-hear.conf, config/ae9-rear-rca-in.conf).
 EXTRA_INPUTS = {
     "optical_in": ("alsa_input.ae9_optical", 1),       # optical (S/PDIF) in, hw:AE9,1
     "what_u_hear": ("alsa_input.ae9_what_u_hear", 2),  # what the card plays, hw:AE9,2
+    "rear_rca": ("alsa_input.ae9_rear_rca", 3),        # head unit rear RCA, hw:AE9,3 (0.10.1)
 }
 
 
@@ -48,7 +49,7 @@ def is_ae9(props):
 
 
 def input_kind(props):
-    """For an AE-9 Audio/Source: "optical_in", "what_u_hear" or "mic" (the
+    """For an AE-9 Audio/Source: "optical_in", "what_u_hear", "rear_rca" or "mic" (the
     XLR / line-in, hw:AE9,0)."""
     name = str(props.get("node.name", "")).lower()
     desc = str(props.get("node.description", "")).lower()
@@ -58,6 +59,8 @@ def input_kind(props):
             return key
     if "what_u_hear" in name or "what u hear" in desc:
         return "what_u_hear"
+    if "rear_rca" in name or "rear rca" in desc:
+        return "rear_rca"
     if "optical" in name or "optical" in desc or "iec958" in name:
         return "optical_in"
     return "mic"
@@ -99,7 +102,8 @@ def driver_at_least(*want, version=None):
 
 
 def has_capture_pcm(device, card_id=CARD_ID):
-    """The driver offers capture device `device` (1 = optical in, 2 = What U Hear)."""
+    """The driver offers capture device `device` (1 = optical in, 2 = What U Hear,
+    3 = head unit rear RCA)."""
     return os.path.exists(f"/proc/asound/{card_id}/pcm{device}c")
 
 

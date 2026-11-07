@@ -5,6 +5,47 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.0 (2026-11-07)
+
+For driver 0.10.1: the new Rear RCA In meter, a ONE-SIDED flag for one
+What U Hear channel going wrong, and the driver's state in the debug log.
+On SbAe9-Kit 0.3.6.
+
+### Added
+
+- **Rear RCA In** meter, for driver 0.10.1's new input: the head unit's rear
+  RCA L/R jacks (`alsa_input.ae9_rear_rca`, hw:AE9,3, from the driver's
+  `config/ae9-rear-rca-in.conf`). It's wired like Mic / Aux: only while the
+  AE-9 plays, unless Always capture or Keep awake is on. Without the driver
+  or the config it reads "not found".
+- **ONE-SIDED flag**, next to SILENT: one What U Hear channel goes silent,
+  noisy or far off in level while the other still matches the output, for
+  over 0.5 s. It's for the card dropping one side's route after a stream
+  restart (static on the right only, after a bit-depth change in DSP mode).
+  It shows a badge, a count and a red What U Hear card, logs a
+  `ONE-SIDED L|R` line with the driver srcversion, and saves the last 3 s as a
+  WAV (output L/R and What U Hear L/R, lined up) in
+  `~/.local/state/sbae9-audiomon/captures/`.
+  In DSP mode it allows for what the card does to one side on purpose (Speaker
+  Level and Distance differences, Bass Redirect), and it isn't judged on
+  multichannel streams or for 3 s after a stream starts or a driver setting
+  changes.
+- **Driver state in the log**: Direct Mode, SBX, PCM Bit Depth, Speaker Config,
+  Headphone Profile and Head Unit Output at start and on each change (read with
+  `amixer`, never written), and the playback stream's format and rate when it
+  opens or changes. SILENT and ONE-SIDED lines name the driver change just
+  before them.
+
+### Changed
+
+- Switching Direct Mode (which restarts the running stream on purpose) holds
+  SILENT off for 3 s, like a PipeWire restart. So does a new stream in DSP mode
+  while the driver moves it into the DSP.
+
+### Fixed
+
+- Quitting with Ctrl-C no longer logs "PipeWire went away" after "stopped".
+
 ## 0.3.3 (2026-11-06)
 
 Ready for driver 0.9.8: survives PipeWire restarts and ignores the voice-chat

@@ -253,6 +253,107 @@ class VirtualAe9Nodes(MonitorTest):
         self.assertNotIn("ae9_voice", self.log_text())
 
 
+class DriverStateInTheLog(MonitorTest):
+    """The watched controls and the stream's format go into the log, and a
+    dropout line names the driver change just before it."""
+
+    STREAM = ("access: RW_INTERLEAVED\nformat: {fmt}\nsubformat: STD\nchannels: 2\n"
+              "rate: 48000 (48000/1)\nperiod_size: 1024\nbuffer_size: 4096\n")
+
+    def tearDown(self):
+        support.set_stream("closed")
+        super().tearDown()
+
+    def test_changes_logged_and_named_on_silent(self):
+        log = self.log_text()
+        self.assertIn("Driver state: Headphone Profile Off, PCM Bit Depth 24-bit, Direct Mode on, "
+                      "Head Unit Output Headphones, SBX off, Speaker Config 2.1, Surround on, "
+                      "Bass Redirect off, Front L level +0 dB, Front R level +0 dB, "
+                      "Front L distance 0 cm, Front R distance 0 cm", log)
+
+        support.set_stream(self.STREAM.format(fmt="S24_LE"))
+        self.pw.add_stream("Music Player", "song.flac", -12)
+        self.assertTrue(wait_until(lambda: "AE-9 stream: S24_LE, 2 ch, 48000 Hz" in self.log_text()))
+
+        support.CONTROLS.set("PCM Bit Depth", "32-bit")
+        support.set_stream(self.STREAM.format(fmt="S32_LE"))
+        self.assertTrue(wait_until(lambda: "AE-9 stream changed: S32_LE" in self.log_text()))
+        self.assertIn("Driver: PCM Bit Depth 24-bit → 32-bit", self.log_text())
+
+        self.pw.silent_restart = True
+        self.assertTrue(wait_until(lambda: self.view.silence.active, 5))
+        start = self.log_text().split("SILENT #1 start")[1].splitlines()[0]
+        self.assertIn("| after: stream S24_LE, 2 ch, 48000 Hz, period 1024, buffer 4096 → S32_LE", start)
+
+
+class DirectModeSwitch(MonitorTest):
+    """Switching Direct Mode restarts the running stream on purpose (an xrun):
+    like a PipeWire restart, it ends SILENT and holds it off for a moment."""
+
+    def test_switch_holds_silent(self):
+        self.pw.silent_restart = True
+        self.pw.add_stream("mpv", "tone.flac", -12)
+        self.assertTrue(wait_until(lambda: self.view.silence.active, 5))
+        support.CONTROLS.set("Direct Mode Switch", "off")
+        self.assertTrue(wait_until(lambda: not self.view.silence.active))
+        self.assertIn("SILENT #1 end", self.log_text())
+        self.assertIn("(Direct Mode switched off)", self.log_text())
+        process(250)                                    # inside the settle: held
+        self.assertEqual(self.view.silence.count, 1)
+        self.assertTrue(wait_until(lambda: self.view.silence.active, 5))   # still silent after it
+        self.assertEqual(self.view.silence.count, 2)
+        self.assertIn("after: Direct Mode on → off", self.log_text().split("SILENT #2 start")[1])
+
+
+class OneSidedInTheWindow(MonitorTest):
+    """The fake meters have no samples, so the test feeds the two meters a
+    recording where What U Hear's right side goes silent."""
+
+    def test_badge_count_and_log(self):
+        self.pw.add_stream("Music Player", "song.flac", -12)
+        self.assertTrue(wait_until(lambda: self.wired("wuh")))
+        self._feed_r_silent()
+        self.assertTrue(wait_until(lambda: self.view.onesided.active, 5))
+        self._check_flagged()
+
+    def _feed_r_silent(self):
+        import numpy as np
+        from audiomon import onesided
+        rng = np.random.default_rng(3)
+        n, lag = int(onesided.KEEP * core.RATE), 1776
+        mon = np.repeat(np.convolve(rng.standard_normal(n + lag), np.ones(8) / 8, "same")[:, None] * 0.3, 2, 1)
+        mon[:, 1] = np.roll(mon[:, 1], 7)           # a little stereo
+        wuh = mon[:n].copy()
+        wuh[:, 1] = 0
+        mon = mon[lag:]
+        for key, data in (("monitor", mon), ("wuh", wuh)):
+            self.view.fixed[key].capture.recent = lambda frames, d=data: (d[-frames:], time.monotonic())
+
+    def _check_flagged(self):
+        self.assertTrue(self.win.onesided_lbl.isVisibleTo(self.win))
+        self.assertEqual(self.win.onesided_lbl.text(), "ONE-SIDED R")
+        self.assertEqual(self.win.dropouts_lbl.text(), "Dropouts: 0 · One-sided: 1")
+        self.assertTrue(self.view.fixed["wuh"].alert)
+        log = self.log_text()
+        self.assertIn("ONE-SIDED R #1 start: What U Hear R went silent", log)
+        self.assertIn("saved the last 3 s", log)
+
+        self.pw.stop_stream(next(iter(self.pw.streams)))
+        self.assertTrue(wait_until(lambda: not self.view.onesided.active, 5))
+        self.assertIn("ONE-SIDED R #1 end", self.log_text())
+        self.assertFalse(self.win.onesided_lbl.isVisibleTo(self.win))
+
+    def test_not_judged_on_a_multichannel_stream(self):
+        self.pw.add_stream("mpv", "film.mkv", -12)
+        self.assertTrue(wait_until(lambda: self.wired("wuh")))
+        support.set_stream("format: S32_LE\nchannels: 6\nrate: 48000 (48000/1)\n")
+        self._feed_r_silent()
+        process(1500)
+        support.set_stream("closed")
+        self.assertFalse(self.view.onesided.active)
+        self.assertEqual(self.view.onesided.count, 0)
+
+
 class OpticalWithoutLight(MonitorTest):
     let_idle = False
 
@@ -301,6 +402,37 @@ class NoExtraSources(MonitorTest):
         self.pw.add_stream("Firefox", "YouTube", -14)
         process(1200)
         self.assertEqual(self.view.silence.count, 0)   # can't judge without What U Hear
+
+
+class RearRcaIn(MonitorTest):
+    """Driver 0.10.1's Rear RCA In (the head unit's rear RCA jacks): its own
+    meter, wired like Mic / Aux only while the AE-9 plays."""
+
+    def test_metered_while_playing_and_let_idle(self):
+        rca = self.view.fixed["rear_rca"]
+        self.assertEqual(rca.title_lbl.text(), "Rear RCA In")
+        self.assertIn("rear RCA", rca.title_lbl.toolTip())
+        self.assertIn(f"AE-9 Rear RCA In: found {testing.REAR_RCA}", self.log_text())
+        self.assertFalse(self.wired("rear_rca"))             # card idle: not wired
+        self.pw.rear_rca_db = -20
+        sid = self.pw.add_stream("Firefox", "YouTube", -14)
+        self.assertTrue(wait_until(lambda: self.wired("rear_rca")))
+        process(400)
+        self.assertAlmostEqual(rca.tick_peak_db, -20, delta=0.5)
+        self.assertIsNot(self.view.fixed["mic"].capture, rca.capture)
+        self.pw.stop_stream(sid)
+        self.assertTrue(wait_until(lambda: not self.wired("rear_rca")))
+        self.assert_listen_only()
+
+
+class WithoutRearRca(MonitorTest):
+    card = dict(rear_rca=False)
+
+    def test_older_driver_or_no_config(self):
+        process(400)
+        self.assertEqual(self.view.fixed["rear_rca"].note, "not found")
+        self.assertIn("AE-9 Rear RCA In: not found", self.log_text())
+        self.assertEqual(self.view.present["mic"], self.pw.node(MIC)["id"])
 
 
 class QuickToggles(MonitorTest):

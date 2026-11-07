@@ -15,7 +15,7 @@ from sbae9kit import frame
 from . import __version__, core
 from . import theme as T
 from .core import CONFIG_PATH, save_config
-from . import monitor
+from . import monitor, onesided
 from .monitor import AE9View, ManualView
 from .theme import app_icon, make_icon, rgba, stylesheet
 from .widgets import StatusDot, hline, label, log_view
@@ -136,19 +136,19 @@ class SettingsPage(Page):
         self.body.addWidget(label("Monitoring", "sectionTitle"))
         self.auto_cb = check(
             "Auto-wire AE-9",
-            "Meter the AE-9's output, What U Hear, Mic / Aux, Optical In and every "
-            "app stream playing to the AE-9. Listen-only: never changes defaults, moves "
-            "streams or touches mixer controls.",
+            "Meter the AE-9's output, What U Hear, Mic / Aux, Optical In, Rear RCA In and "
+            "every app stream playing to the AE-9. Listen-only: never changes defaults, moves "
+            "streams or changes mixer controls (it only reads a few, for the log).",
             cfg["mode"] == "ae9", win.set_auto)
         self.idle_cb = check(
             "Let the AE-9 idle",
             "Meters never keep the card awake. The output and app meters are passive, and "
-            "What U Hear / Mic / Aux / Optical In are only wired while the AE-9 sink is running. "
+            "What U Hear / Mic / Aux / Optical In / Rear RCA In are only wired while the AE-9 sink is running. "
             "Off: everything stays wired and the AE-9 never suspends.",
             cfg["let_idle"], win.set_let_idle)
         self.capture_cb = check(
             "Always capture inputs",
-            "Comparison mode: keep What U Hear / Mic / Aux / Optical In wired while the card idles "
+            "Comparison mode: keep What U Hear / Mic / Aux / Optical In / Rear RCA In wired while the card idles "
             "(their capture converters and DMA stay running). The sink can still suspend.",
             cfg["always_capture"], win.set_always_capture)
 
@@ -255,6 +255,9 @@ class SettingsPage(Page):
             f"SILENT: output monitor above {monitor.MON_SIGNAL_DB:.0f} dBFS while What U Hear stays below "
             f"{monitor.WUH_SILENT_DB:.0f} dBFS for over {monitor.SILENT_AFTER} s ({monitor.WIRE_GRACE:.0f} s grace after "
             f"wiring What U Hear)<br>"
+            f"ONE-SIDED: one What U Hear channel silent, noisy or {onesided.LEVEL_SKEW_DB:.0f} dB off while the "
+            f"other still matches the output, for over {onesided.ONE_SIDED_AFTER} s; the last "
+            f"{onesided.SAVE_SECONDS:.0f} s are saved as a WAV<br>"
             f"Log: {self.win.log.path}<br>Config: {CONFIG_PATH}")
         super().showEvent(e)
 
@@ -407,6 +410,11 @@ class MainWindow(QWidget):
                                    f"{monitor.WUH_SILENT_DB:.0f} dBFS for more than {monitor.SILENT_AFTER}s")
         self.silent_lbl.hide()
         bl.addWidget(self.silent_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.onesided_lbl = label("ONE-SIDED", "silentBadge")
+        self.onesided_lbl.setToolTip("One What U Hear channel stopped matching the output (silent, noisy "
+                                     "or off in level) while the other still does. See the Event Log.")
+        self.onesided_lbl.hide()
+        bl.addWidget(self.onesided_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         self.dropouts_lbl = label("", "bigValue")
         bl.addWidget(self.dropouts_lbl)
         v.addWidget(bottom)
@@ -421,6 +429,9 @@ class MainWindow(QWidget):
         self.set_frameless(cfg["frameless"], save=False)
 
         self._silent = False
+        self._silent_count = 0
+        self._onesided = None       # "L" / "R" while ONE-SIDED is flagged
+        self._onesided_count = 0
         self._sink_state = None
         self.sync_controls()
         self.monitor.rebuild()
@@ -468,6 +479,9 @@ class MainWindow(QWidget):
         self.monitor.rebuild()
         self._sink_state = None
         self._silent = False
+        self._onesided = None
+        self._silent_count = self._onesided_count = 0
+        self.dropouts_lbl.setText("")
         self._refresh_status()
 
     def set_let_idle(self, on):
@@ -566,7 +580,20 @@ class MainWindow(QWidget):
 
     def set_silent(self, active, count):
         self._silent = active
-        self.dropouts_lbl.setText(f"Dropouts: {count}")
+        self._silent_count = count
+        self._set_counts()
+
+    def set_one_sided(self, side, count):
+        """side: "L" / "R" while flagged, else None."""
+        self._onesided = side
+        self._onesided_count = count
+        self._set_counts()
+
+    def _set_counts(self):
+        text = f"Dropouts: {self._silent_count}"
+        if self._onesided_count:
+            text += f" · One-sided: {self._onesided_count}"
+        self.dropouts_lbl.setText(text)
         self._refresh_status()
 
     def _refresh_status(self):
@@ -575,13 +602,16 @@ class MainWindow(QWidget):
             self.state_lbl.setText("Auto-wire off")
             self.dropouts_lbl.setText("")
             self.silent_lbl.hide()
+            self.onesided_lbl.hide()
             return
         s = self._sink_state
         colors = {"running": T.OK, "idle": T.WARN, "suspended": T.IDLE}
-        self.dot.set_color(T.DANGER if self._silent else colors.get(s, T.DANGER))
+        self.dot.set_color(T.DANGER if self._silent or self._onesided else colors.get(s, T.DANGER))
         self.state_lbl.setText((s or "not found").capitalize())
         self.state_lbl.setToolTip("AE-9 sink state")
         self.silent_lbl.setVisible(self._silent)
+        self.onesided_lbl.setText(f"ONE-SIDED {self._onesided or ''}".strip())
+        self.onesided_lbl.setVisible(bool(self._onesided))
         if not self.dropouts_lbl.text():
             self.dropouts_lbl.setText("Dropouts: 0")
 

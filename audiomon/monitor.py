@@ -4,7 +4,9 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
-from . import __version__, core, pipewire
+import os
+
+from . import __version__, core, driverstate, onesided, pipewire
 from .core import CHANNEL_MAPS, FLOOR_DB, choose_channels, fmt_db, save_config
 from .pipewire import Snapshot, find_ae9, is_ours
 from .widgets import MeterPanel, label, log_view
@@ -16,6 +18,11 @@ WUH_SILENT_DB = -60.0   # What U Hear counts as silent below this (peak)
 SILENT_AFTER = 0.5      # seconds
 WIRE_GRACE = 1.0        # ignore What U Hear for this long after (re)wiring it
 PW_RESTART_GRACE = 3.0  # no SILENT for this long after PipeWire comes back
+CHANGE_NOTE_FOR = 30.0  # a dropout line names a driver change this recent
+HW_PARAMS_EVERY = 0.5   # seconds between looks at the stream's format while it runs
+SETTLE = 3.0            # after a stream starts or a driver setting changes: no ONE-SIDED
+                        # (and no SILENT after a Direct Mode switch, or while a new stream
+                        # moves into the DSP), since the driver restarts or reroutes it
 
 
 class ManualView(QWidget):
@@ -53,11 +60,13 @@ FIXED_TAPS = (
     ("wuh", "AE-9 What U Hear", "sbae9-audiomon.ae9.wuh", True),
     ("mic", "AE-9 Head Unit Mic / Aux", "sbae9-audiomon.ae9.mic", True),
     ("optical", "AE-9 Optical In", "sbae9-audiomon.ae9.optical", True),
+    ("rear_rca", "AE-9 Rear RCA In", "sbae9-audiomon.ae9.rear_rca", True),
 )
 
 # On screen each meter shows a short name (and its state); where it is, jack by
 # jack, is on hover.
-SHORT_NAMES = {"monitor": "Output", "wuh": "What U Hear", "mic": "Mic / Aux", "optical": "Optical In"}
+SHORT_NAMES = {"monitor": "Output", "wuh": "What U Hear", "mic": "Mic / Aux", "optical": "Optical In",
+               "rear_rca": "Rear RCA In"}
 DETAILS = {
     "monitor": "What PipeWire sends to the AE-9: the card's RCA out in speaker mode, or the "
                "head unit's headphone jacks (3.5 mm and 1/4\") in headphone mode.",
@@ -67,15 +76,18 @@ DETAILS = {
            "(alsa_input.pci-…analog-stereo).",
     "optical": "The card's optical in jack (alsa_input.ae9_optical). With no light on the jack "
                "it reads \"no signal\".",
+    "rear_rca": "The head unit's rear RCA L/R input jacks, recorded alongside the mic "
+                "(alsa_input.ae9_rear_rca, hw:AE9,3; driver 0.10.1+ with config/ae9-rear-rca-in.conf).",
 }
 
 
 class SilenceDetector:
     """SILENT = output monitor has signal but What U Hear stays quiet."""
 
-    def __init__(self, log, on_change):
+    def __init__(self, log, on_change, note=lambda now: ""):
         self.log = log
         self.on_change = on_change
+        self.note = note
         self.active = False
         self.count = 0
         self.mon_last_loud = -1e9
@@ -108,7 +120,8 @@ class SilenceDetector:
             no_data = now - self.wuh_last_data > SILENT_AFTER
             wuh = "no data" if no_data else f"{fmt_db(wuh_db if wuh_db is not None else FLOOR_DB)} dBFS"
             self.log(f"SILENT #{self.count} start: output monitor {fmt_db(mon_db or FLOOR_DB)} dBFS, "
-                     f"What U Hear {wuh} for {now - onset:.1f}s | sink {sink_state} | {core.driver_info()}")
+                     f"What U Hear {wuh} for {now - onset:.1f}s | sink {sink_state} | {core.driver_info()}"
+                     + self.note(now))
             self.on_change()
         elif not silent and self.active:
             if sink_state != "running":
@@ -150,7 +163,19 @@ class AE9View(QWidget):
         self.pw_restarts = 0        # the graph's restart count we've handled
         self.pw_back_at = -1e9      # when PipeWire last came back
         self.reported_failures = set()
-        self.silence = SilenceDetector(self.log, self._silence_changed)
+        self.silence = SilenceDetector(self.log, self._silence_changed, note=self._change_note)
+        self.onesided = onesided.OneSidedDetector(
+            self.log, self._silence_changed, note=self._change_note,
+            save_dir=os.path.join(os.path.dirname(core.LOG_PATH), "captures"))
+        self.controls = driverstate.ControlWatcher()
+        self.driver_state = {}      # watched control -> value
+        self.last_change = None     # (text, time) of the latest driver change
+        self.first_state = {}       # first values, logged together as one line
+        self.first_since = None
+        self.stopped = False
+        self.stream_format = None   # the open playback stream, from hw_params
+        self.settle = {}            # "both" / "onesided" -> (until, why)
+        self.next_hw_check = 0.0
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -162,7 +187,7 @@ class AE9View(QWidget):
         for key, title, node_name, _gated in FIXED_TAPS:
             passive = self.let_idle and key == "monitor"
             p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive, fit=win.fit_window,
-                           node_label=title,
+                           node_label=title, keep=onesided.KEEP if key in ("monitor", "wuh") else 0,
                            tooltip=f"{title}\n{DETAILS[key]}\nmeter node: {node_name}")
             p.note = "searching…"
             self.fixed[key] = p
@@ -201,6 +226,8 @@ class AE9View(QWidget):
     # -- per-frame -------------------------------------------------------
 
     def tick(self, now, dt):
+        if self.stopped:
+            return
         for p in self.fixed.values():
             p.tick(now, dt)
         for p, _, _ in self.streams.values():
@@ -221,12 +248,104 @@ class AE9View(QWidget):
                 self.reported_failures.add(msg)
                 self.log(f"pw-link failed: {msg}")
 
+        self._watch_driver(now)
         self._watch_pipewire(now)
-        if self.pw_down or now - self.pw_back_at < PW_RESTART_GRACE:
-            self.silence.end(now, "PipeWire restarted")
+        pw_held = self.pw_down or now - self.pw_back_at < PW_RESTART_GRACE
+        both_why = self._settling(now, "both")
+        if pw_held or both_why:
+            self.silence.end(now, "PipeWire restarted" if pw_held else both_why)
         else:
             self.silence.update(now, self.fixed["monitor"].tick_peak_db, self.fixed["wuh"].tick_peak_db,
                                 self.wuh_ready_since, self.sink_state or "absent")
+
+        # ONE-SIDED: only while What U Hear is wired, settled and not SILENT
+        ds = self.driver_state
+        dsp = ds.get("Direct Mode Switch") == "off"
+        stream_ch = driverstate.channels(self.stream_format)
+        if pw_held:
+            held = "PipeWire restarted"
+        elif both_why or self._settling(now, "onesided"):
+            held = both_why or self._settling(now, "onesided")
+        elif (stream_ch or 2) > 2 or self.fixed["monitor"].channels > 2:
+            held = "multichannel stream (What U Hear carries only the front pair)"
+        elif self.sink_state != "running":
+            held = f"playback stopped, AE-9 sink {self.sink_state or 'absent'}"
+        elif self.wuh_ready_since is None or now - self.wuh_ready_since < WIRE_GRACE:
+            held = "What U Hear unwired/absent"
+        elif self.silence.active:
+            held = "SILENT"
+        else:
+            held = ""
+        num = driverstate.number
+        setup = {}
+        if dsp:     # the speaker setup only applies in DSP mode
+            setup["sbx"] = ds.get("SBX Switch") == "on"
+            lvl = num(ds.get("Speaker Level Front L Volume")), num(ds.get("Speaker Level Front R Volume"))
+            if None not in lvl:
+                setup["level_offset_db"] = lvl[1] - lvl[0]
+            dist = num(ds.get("Speaker Distance Front L")), num(ds.get("Speaker Distance Front R"))
+            if None not in dist:
+                setup["side_delay"] = onesided.delay_frames(*dist)
+            setup["no_lows"] = (ds.get("Bass Redirect Switch") == "on"
+                                and ds.get("Speaker Config") in ("2.1", "4.1", "5.1"))
+        self.onesided.update(now, self.fixed["monitor"].capture, self.fixed["wuh"].capture,
+                             not held, held, **setup)
+
+    def _settle_for(self, now, which, why):
+        until, _ = self.settle.get(which, (0.0, ""))
+        if now + SETTLE > until:
+            self.settle[which] = (now + SETTLE, why)
+
+    def _settling(self, now, which):
+        """Why `which` is held right now, or ""."""
+        until, why = self.settle.get(which, (0.0, ""))
+        return why if now < until else ""
+
+    # -- driver state ----------------------------------------------------
+
+    def _watch_driver(self, now):
+        """Log the watched controls (once, then each change) and the playback
+        stream's format whenever it opens or changes."""
+        for name, value in self.controls.poll():
+            old = self.driver_state.get(name)
+            self.driver_state[name] = value
+            if old is None:
+                self.first_state[name] = value
+                self.first_since = self.first_since or now
+            elif old != value:
+                text = f"{driverstate.short(name)} {old} → {value}"
+                self.last_change = (text, now)
+                self.log(f"Driver: {text}")
+                self._settle_for(now, "onesided", f"settling after {text}")
+                if name == "Direct Mode Switch":    # the driver restarts the running stream
+                    self._settle_for(now, "both", f"Direct Mode switched {value}")
+        if self.first_state and (len(self.first_state) >= len(driverstate.WATCH)
+                                 or now - self.first_since > 1.0):
+            self.log("Driver state: " + ", ".join(f"{driverstate.short(n)} {v}"
+                                                  for n, v in self.first_state.items()))
+            self.first_state, self.first_since = {}, None
+
+        if self.sink_state != "running":
+            self.stream_format = None
+        elif now >= self.next_hw_check:
+            self.next_hw_check = now + HW_PARAMS_EVERY
+            fmt = driverstate.read_hw_params()
+            if fmt and fmt != self.stream_format:
+                if self.stream_format:
+                    self.last_change = (f"stream {self.stream_format} → {fmt}", now)
+                    self.log(f"AE-9 stream changed: {fmt}")
+                    self._settle_for(now, "onesided", "stream restarted")
+                else:
+                    self.log(f"AE-9 stream: {fmt}")
+                self.stream_format = fmt
+
+    def _change_note(self, now):
+        """' | after: <change>, 1.2 s before' for a dropout line, when a driver
+        change came shortly before it."""
+        if not self.last_change or now - self.last_change[1] > CHANGE_NOTE_FOR:
+            return ""
+        text, at = self.last_change
+        return f" | after: {text}, {now - at:.1f} s before"
 
     def _watch_pipewire(self, now):
         """A PipeWire restart (Sound Blaster Command's What U Hear rate picker
@@ -253,8 +372,9 @@ class AE9View(QWidget):
         self.wuh_ready_since = None
 
     def _silence_changed(self):
-        self.fixed["wuh"].alert = self.silence.active
+        self.fixed["wuh"].alert = self.silence.active or self.onesided.active
         self.win.set_silent(self.silence.active, self.silence.count)
+        self.win.set_one_sided(self.onesided.side if self.onesided.active else None, self.onesided.count)
 
     # -- graph reconciliation ------------------------------------------------
 
@@ -281,6 +401,11 @@ class AE9View(QWidget):
             if sink:
                 self.log(f"AE-9 sink state: {self.sink_state or '-'} → {state}"
                          + (f" (error: {sink.error})" if sink.error else ""))
+            if state == "running":
+                self._settle_for(now, "onesided", "stream starting")
+                if self.driver_state.get("Direct Mode Switch") == "off":
+                    # the driver starts a new stream direct, then moves it into the DSP
+                    self._settle_for(now, "both", "stream moving into the DSP")
             self.sink_state = state
             self.win.set_sink_state(state)
         sink_running = state == "running"
@@ -402,8 +527,12 @@ class AE9View(QWidget):
         return bool(wanted) and wanted <= existing.keys()
 
     def stop(self):
+        self.stopped = True
         if self.silence.active:
             self.log(f"SILENT #{self.silence.count} still active at exit")
+        if self.onesided.active:
+            self.log(f"ONE-SIDED {self.onesided.side} #{self.onesided.count} still active at exit")
+        self.controls.stop()
         self.log("SbAe9-AudioMon AE-9 mode stopped")
         self.log.remove_view(self.logview)
         self.graph.stop()

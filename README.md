@@ -60,15 +60,15 @@ blur.</sub>
   Switching Glass on or off reopens the window, which restarts monitoring for
   about a second, and the debug log says so.
 - **Meter cards:** each shows a short name (Output, What U Hear, Mic / Aux,
-  Optical In) and its state. Hover the title for the full name, the jacks it
+  Optical In, Rear RCA In) and its state. Hover the title for the full name, the jacks it
   covers and its PipeWire node.
 - **Bottom bar:**
-  - a status dot: green = running, amber = idle, grey = suspended, red = SILENT or card missing;
+  - a status dot: green = running, amber = idle, grey = suspended, red = SILENT, ONE-SIDED or card missing;
   - the AE-9 sink state;
   - on the Monitor page, quick toggles for the three Settings → Monitoring options
     (Auto-wire, Let idle, Always capture), kept in sync with Settings;
-  - the **SILENT** badge;
-  - the dropout count.
+  - the **SILENT** and **ONE-SIDED** badges;
+  - the dropout count (and the one-sided count, once there's one).
 
 ## Modes
 
@@ -82,26 +82,57 @@ SbAe9-AudioMon finds the AE-9's PipeWire nodes by name/card and wires a meter to
 | AE-9 What U Hear | `alsa_input.ae9_what_u_hear` (what the card actually plays, after its DSP) | `sbae9-audiomon.ae9.wuh` |
 | AE-9 Head Unit Mic / Aux | the head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it (`alsa_input.pci-…analog-stereo`, hw:AE9,0) | `sbae9-audiomon.ae9.mic` |
 | AE-9 Optical In | the card's optical in jack, `alsa_input.ae9_optical` (shows "no signal" without light on the jack) | `sbae9-audiomon.ae9.optical` |
+| AE-9 Rear RCA In | the head unit's rear RCA L/R input jacks, `alsa_input.ae9_rear_rca` (hw:AE9,3; driver 0.10.1+ with its `config/ae9-rear-rca-in.conf`, else "not found") | `sbae9-audiomon.ae9.rear_rca` |
 | one per app stream | every app stream playing to the AE-9 sink, added/removed as they come and go | `sbae9-audiomon.stream.<id>` |
 
 Nodes are re-found and re-wired automatically when the card drops off and comes
 back (PSU cycle, driver reload, suspend).
 
 **Listen-only.** SbAe9-AudioMon never changes the default sink/source, never moves or
-relinks app streams, and never touches ALSA mixer controls. The only links it
-creates or removes are its own, from AE-9 / stream ports into its meter nodes.
+relinks app streams, and never changes ALSA mixer controls (it only reads a
+few, for the log). The only links it creates or removes are its own, from
+AE-9 / stream ports into its meter nodes.
 
 **SILENT flag.** Lights up (and counts a dropout) when the output monitor has
 signal (> -50 dBFS peak) but What U Hear stays below -60 dBFS for more than
 0.5 s. What U Hear is ignored for 1 s after it's (re)wired so it can start up.
 Thresholds are constants at the top of `audiomon/monitor.py`.
 
+**ONE-SIDED flag.** Lights up when one What U Hear channel stops matching the
+output while the other still does, for more than 0.5 s. It's for the card
+losing one side's route after a stream restart (static or silence on one side
+only), which SILENT can't see because the other side keeps playing. A few
+times a second it lines up What U Hear with the output (What U Hear runs a
+little behind) and flags a side that:
+
+- stops following the output, or goes silent;
+- is noisy (much more that doesn't match the output than the other side);
+- has much more above 8 kHz than the other side;
+- is more than 10 dB off in level compared with the other side;
+- no longer matches the other side, when the output's L and R match each
+  other (not judged with SBX on in DSP mode, since Surround spreads L and R).
+
+Every rule compares one side with the other, so effects that change both
+sides alike (SBX, Crystalizer, EQ, Headphone Profile, volume) don't trip it.
+What the card does to one side on purpose in DSP mode (Direct Mode off) is
+allowed for: a Speaker Level difference between Front L and R, the delay a
+Speaker Distance difference asks for, and Bass Redirect taking the lows to
+the sub. It isn't judged on a multichannel stream (What U Hear carries only
+the front pair), for 3 s after a stream starts or restarts, or for 3 s after
+a driver setting changes. Switching Direct Mode restarts the stream on
+purpose, so it also holds SILENT off for 3 s, like a PipeWire restart, and
+so does a new stream in DSP mode while the driver moves it into the DSP.
+When it's flagged,
+the last 3 s are saved as a 4-channel WAV (output L/R, What U Hear L/R, lined
+up) in `~/.local/state/sbae9-audiomon/captures/`, at most 20 per run.
+Thresholds are in `audiomon/onesided.py`.
+
 **Let the AE-9 idle** (on by default). Meters must not stop the card from
 suspending:
 
 - The output-monitor and app-stream meters are passive nodes (`node.passive`),
   so they only receive data while the card is running anyway.
-- What U Hear, the head unit's Mic / Aux and Optical In have to actively capture, so they're only
+- What U Hear, the head unit's Mic / Aux, Optical In and Rear RCA In have to actively capture, so they're only
   wired while the AE-9 sink is `running`, and they're unwired as soon as it goes idle.
   This means nothing of ours holds an AE-9 PCM open while it idles or suspends.
 
@@ -110,7 +141,7 @@ That keeps the AE-9 running permanently.
 
 **Always capture inputs** (off by default, `--always-capture`) is a comparison
 mode. The output and app meters stay passive, so the sink can still suspend,
-but What U Hear, the head unit's Mic / Aux and Optical In stay wired all the time. That keeps the card's
+but What U Hear, the head unit's Mic / Aux, Optical In and Rear RCA In stay wired all the time. That keeps the card's
 capture converters and DMA running while playback is idle. Use it to check
 whether open captures change the bug's behaviour.
 
@@ -121,10 +152,19 @@ the bottom of the window. Times are local, to the second, to line up with
 - sink state changes (running / idle / suspended);
 - wiring changes;
 - app streams starting and ending;
-- SILENT start and end.
+- PipeWire restarts;
+- the driver's state at start, then each change to Direct Mode, SBX, PCM Bit
+  Depth, Speaker Config, Headphone Profile, Head Unit Output, Surround, Bass
+  Redirect and the front speakers' Level and Distance (read with
+  `amixer -c AE9`, never written);
+- the playback stream's format, rate and buffer when it opens or changes
+  (from `/proc/asound/AE9/pcm0p/sub0/hw_params`);
+- SILENT and ONE-SIDED start and end, and where the WAV was saved.
 
-SILENT lines and card (re)appearances include the driver version and srcversion
-from `/sys/module/snd_hda_codec_creative_ae9/`.
+SILENT and ONE-SIDED lines and card (re)appearances include the driver version
+and srcversion from `/sys/module/snd_hda_codec_creative_ae9/`. A SILENT or
+ONE-SIDED line also names the driver change that came in the 30 s before it
+(`| after: PCM Bit Depth 32-bit → 24-bit, 0.8 s before`).
 
 ### Manual meters
 
@@ -138,8 +178,9 @@ in Settings.
 
 ## Requirements
 
-Python 3, PySide6 (Qt 6), numpy, and `pw-record` / `pw-link` / `pw-dump` (pipewire-utils).
-On Fedora: `sudo dnf install python3-pyside6 python3-numpy pipewire-utils`
+Python 3, PySide6 (Qt 6), numpy, `pw-record` / `pw-link` / `pw-dump` (pipewire-utils)
+and `amixer` (alsa-utils, for the driver-state lines).
+On Fedora: `sudo dnf install python3-pyside6 python3-numpy pipewire-utils alsa-utils`
 
 ## Run
 
@@ -166,7 +207,7 @@ installed. Re-run it after each tested change.
 | Path | What it is |
 |---|---|
 | `sbae9-audiomon` | The launcher (runs the package from wherever it lives) |
-| `audiomon/` | The app: `core` (constants, config), `pipewire` (graph, linking, AE-9 nodes), `capture` (pw-record meters), `meters`, `monitor` (AE-9 wiring, SILENT), `widgets`, `window`, `theme`, `eventlog` |
+| `audiomon/` | The app: `core` (constants, config), `pipewire` (graph, linking, AE-9 nodes), `capture` (pw-record meters), `meters`, `monitor` (AE-9 wiring, SILENT), `onesided` (ONE-SIDED), `driverstate` (controls and stream format, read-only), `widgets`, `window`, `theme`, `eventlog` |
 | `sbae9kit/` | The shared kit, vendored from SbAe9-Kit by its `tools/sync_kit.py`. Don't edit it here; `tests/test_kit.py` checks it's unchanged. AudioMon never imports its `mixer` (ALSA writes) |
 | `appicon/` | The app icon, 16–512 px, cut by SbAe9-Kit's `tools/make_icons.py` from the artwork `Neon VU Meter Diagnostics.png` (kept outside the repo) |
 | `tests/`, `tools/fake_ae9.py` | Tests and the demo on the fake AE-9 |
@@ -198,6 +239,9 @@ The tests cover:
 - wiring inputs only while it runs;
 - app streams starting and ending;
 - SILENT start and end, with the driver version in the log;
+- ONE-SIDED: silence, static and a level drop on one side, effects on both
+  sides passing, the WAV, and the badge;
+- driver-state lines and the change named on a SILENT line;
 - the card dropping off and coming back;
 - Optical "no signal";
 - keep-awake and always-capture modes;

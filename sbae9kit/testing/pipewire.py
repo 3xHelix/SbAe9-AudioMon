@@ -45,6 +45,7 @@ WHAT_U_HEAR = "alsa_input.ae9_what_u_hear"
 # 3.5 mm mic jack share it (config/61-ae9-names.conf). The snapshot predates it.
 MIC_DESC = "AE-9 Head Unit Mic / Aux"
 OPTICAL = "alsa_input.ae9_optical"
+REAR_RCA = "alsa_input.ae9_rear_rca"     # the head unit's rear RCA in, hw:AE9,3 (driver 0.10.1)
 WUH_OFFSET_DB = 0.0           # What U Hear is level-exact against the source (a -20 dBFS
                               # peak sine reads -20 peak / -23 RMS, as at the output)
 REAL_SUSPEND_AFTER = 5.0      # PipeWire's default idle -> suspend wait
@@ -53,7 +54,8 @@ REAL_SUSPEND_AFTER = 5.0      # PipeWire's default idle -> suspend wait
 class FakePipeWire:
     """The PipeWire graph with the AE-9 in it, plus what it would sound like."""
 
-    def __init__(self, card=True, what_u_hear=True, optical=True, fixture="pw_ae9_stereo.json"):
+    def __init__(self, card=True, what_u_hear=True, optical=True, rear_rca=False,
+                 fixture="pw_ae9_stereo.json"):
         self.fixture = fixture
         self.objects = {}             # id -> pw-dump object
         self._version = 0
@@ -64,12 +66,14 @@ class FakePipeWire:
         self.silent_restart = False   # What U Hear runs but delivers silence (the bug)
         self.mic_db = None            # level on the head unit's Mic / Aux input (None = silence)
         self.optical_db = None        # level on a lit Optical In (None = no light: silence)
+        self.rear_rca_db = None       # level on the head unit's Rear RCA In (None = silence)
+        self.rear_rca = rear_rca      # card_present(True) adds Rear RCA In (driver 0.10.1+)
         self.jitter = 0.0             # +/- dB of random wobble on every level (demos)
         self.suspend_after = scaled(REAL_SUSPEND_AFTER)
         self._idle_since = {}
         self._card_nodes = []
         if card:
-            self.card_present(True, what_u_hear, optical)
+            self.card_present(True, what_u_hear, optical, rear_rca)
 
     # -- building the graph ----------------------------------------------
 
@@ -95,7 +99,7 @@ class FakePipeWire:
                                                 "port.monitor": monitor}}}
         return pid
 
-    def card_present(self, present, what_u_hear=True, optical=True):
+    def card_present(self, present, what_u_hear=True, optical=True, rear_rca=None):
         """Card on (the snapshot's nodes + the driver's extra sources) or off:
         every AE-9 node and its links go, as on a PSU cycle or driver reload."""
         if not present:
@@ -122,9 +126,12 @@ class FakePipeWire:
             else:
                 for ch in ("FL", "FR"):
                     self._port(nid, "out", f"capture_{ch}", ch)
-        # the driver's extra capture devices (hw:AE9,1 and hw:AE9,2)
+        # the driver's extra capture devices (hw:AE9,1, 2 and 3)
+        if rear_rca is None:
+            rear_rca = self.rear_rca
         for want, name, desc, dev in ((what_u_hear, WHAT_U_HEAR, "AE-9 What U Hear", 2),
-                                      (optical, OPTICAL, "AE-9 Optical In", 1)):
+                                      (optical, OPTICAL, "AE-9 Optical In", 1),
+                                      (rear_rca, REAR_RCA, "AE-9 Rear RCA In", 3)):
             if want:
                 nid = self._node({"node.name": name, "node.description": desc,
                                   "media.class": "Audio/Source", "api.alsa.path": f"hw:AE9,{dev}",
@@ -271,6 +278,8 @@ class FakePipeWire:
             return self._wobble(self.mic_db) if self.mic_db is not None else -math.inf
         if name == OPTICAL:
             return self._wobble(self.optical_db) if self.optical_db is not None else -math.inf
+        if name == REAR_RCA:
+            return self._wobble(self.rear_rca_db) if self.rear_rca_db is not None else -math.inf
         return None
 
     def levels_into(self, capture_nid, channels):

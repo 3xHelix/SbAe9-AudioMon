@@ -8,7 +8,7 @@ Command's tools/screenshots.py.
 Runs the real window on the fake AE-9 (sbae9kit.testing via tests/support.py),
 so no real card, PipeWire, settings or debug log are touched:
 
-    monitor     music and a browser playing, mic and optical in use
+    monitor     music and a browser playing, mic, optical and rear RCA in use
     silent      a silent restart: the output plays, What U Hear stays silent
     log         the Event Log after all that
     settings    the Settings page
@@ -32,7 +32,7 @@ import support  # noqa: E402
 W, H = 1320, 860                  # logical size; the PNGs are 2x
 SHOWN_LOG = "~/.local/state/sbae9-audiomon/ae9-debug.log"
 SHOWN_CONFIG = "~/.config/sbae9-audiomon/config.json"
-SHOWN_DRIVER = "snd_hda_codec_creative_ae9 0.9.2 srcversion E10B8D135D072FD243155A3"
+SHOWN_DRIVER = "snd_hda_codec_creative_ae9 0.10.1 srcversion A0CD729B6DADF19C18EE06F"
 
 
 def main():
@@ -102,7 +102,7 @@ def main():
     w = make_window()
     music = pw.add_stream("Music Player", "Night Drive.flac", -11)
     pw.add_stream("Firefox", "YouTube", -21)
-    pw.mic_db, pw.optical_db = -38, -24
+    pw.mic_db, pw.optical_db, pw.rear_rca_db = -38, -24, -30
     run(2.5)
     shot(w, "monitor")
 
@@ -111,7 +111,7 @@ def main():
     pw.stop_stream(music)
     for sid in list(pw.streams):
         pw.stop_stream(sid)
-    pw.mic_db = pw.optical_db = None
+    pw.mic_db = pw.optical_db = pw.rear_rca_db = None
     run(1.5)
     pw.silent_restart = True
     pw.add_stream("mpv", "1 kHz tone", -18)

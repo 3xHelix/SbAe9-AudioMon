@@ -3,8 +3,8 @@
 
 No card, no PipeWire, no real settings: tests run against a fake PipeWire
 graph built from a snapshot of the real machine (fixtures/pw_ae9_stereo.json:
-the AE-9 sink and the head unit's Mic / Aux input on driver 0.6.8), with What U Hear and Optical
-In added the way the driver's PipeWire config adds them.
+the AE-9 sink and the head unit's Mic / Aux input on driver 0.6.8), with What U Hear, Optical
+In and (optionally) Rear RCA In added the way the driver's PipeWire config adds them.
 
     pipewire   FakePipeWire (graph, ports, links, running / idle / suspended,
                levels, a run() dispatcher for PipeWire commands), FakeLinker
@@ -73,5 +73,5 @@ def block_subprocesses():
 
 from .pipewire import (  # noqa: E402,F401
     FakeLinker, FakePipeWire, make_fake_capture,
-    MIC, MIC_DESC, OPTICAL, SINK, WHAT_U_HEAR, WUH_OFFSET_DB,
+    MIC, MIC_DESC, OPTICAL, REAR_RCA, SINK, WHAT_U_HEAR, WUH_OFFSET_DB,
 )

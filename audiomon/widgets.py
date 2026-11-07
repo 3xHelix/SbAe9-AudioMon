@@ -205,7 +205,7 @@ class MeterPanel(QFrame):
     """A card: header (title, status, optional channel picker, reset) + meter."""
 
     def __init__(self, title, node_name, channels, subtitle=None, passive=False,
-                 on_channels=None, fit=None, tooltip=None, node_label=None):
+                 on_channels=None, fit=None, tooltip=None, node_label=None, keep=0):
         """title: the short name shown on the card; node_label: the full name
         the meter's PipeWire node gets (Helvum shows it; defaults to title);
         subtitle: an optional second line for state, e.g. what a stream plays;
@@ -215,6 +215,7 @@ class MeterPanel(QFrame):
         self.title_text = node_label or title
         self.node_name = node_name
         self.passive = passive
+        self.keep = keep            # seconds of raw samples the capture keeps (0 = none)
         self.on_channels = on_channels
         self.fit = fit
         self.capture = None
@@ -279,6 +280,8 @@ class MeterPanel(QFrame):
         if self.capture:
             self.capture.stop()
         self.capture = capture.Capture(self.node_name, self.title_text, channels, self.passive)
+        if self.keep and hasattr(self.capture, "keep_samples"):
+            self.capture.keep_samples(self.keep)
         self.state = MeterState(channels)
         self.meter.updateGeometry()
         if self.fit and self._started:

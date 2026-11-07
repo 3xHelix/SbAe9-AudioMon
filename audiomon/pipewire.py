@@ -151,7 +151,7 @@ def is_ae9(n):
 
 def find_ae9(snap):
     """Locate the AE-9 nodes. Returns dict key -> node (or None)."""
-    found = {"monitor": None, "wuh": None, "mic": None, "optical": None}
+    found = {"monitor": None, "wuh": None, "mic": None, "optical": None, "rear_rca": None}
     for n in sorted(snap.nodes.values(), key=lambda n: n.id):
         if is_ours(n) or not is_ae9(n):
             continue
@@ -165,6 +165,8 @@ def find_ae9(snap):
                 found["wuh"] = found["wuh"] or n
             elif kind == "optical_in":
                 found["optical"] = found["optical"] or n
+            elif kind == "rear_rca":
+                found["rear_rca"] = found["rear_rca"] or n
             elif found["mic"] is None or ("analog" in name and "analog" not in found["mic"].name):
                 found["mic"] = n
     return found

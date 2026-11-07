@@ -16,4 +16,4 @@ pass them in.
     testing   the fake AE-9 both apps' tests run against (tests only)
 """
 
-KIT_VERSION = "0.3.5"
+KIT_VERSION = "0.3.6"

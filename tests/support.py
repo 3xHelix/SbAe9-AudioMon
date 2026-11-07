@@ -22,13 +22,50 @@ from sbae9kit import testing  # noqa: E402
 
 FAKE_DRIVER = "snd_hda_codec_creative_ae9 0.9.2 srcversion FAKE0000000000000000000"
 PW = None
+CONTROLS = None     # the fake ControlWatcher of the window made last
+HW_PARAMS = None    # the fake /proc/asound/AE9/pcm0p/sub0/hw_params
 _done = False
+
+# What driver 0.10.0 starts with on the real machine.
+DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct Mode Switch": "on",
+                "Head Unit Output": "Headphones", "SBX Switch": "off", "Speaker Config": "2.1",
+                "FX Surround Switch": "on", "Bass Redirect Switch": "off",
+                "Speaker Level Front L Volume": "+0 dB", "Speaker Level Front R Volume": "+0 dB",
+                "Speaker Distance Front L": "0 cm", "Speaker Distance Front R": "0 cm"}
+
+
+class FakeControls:
+    """Stands in for driverstate.ControlWatcher: set() is a control changing."""
+
+    def __init__(self, *a, **k):
+        global CONTROLS
+        CONTROLS = self
+        self.error = None
+        self.values = dict(DRIVER_STATE)
+        self._pending = list(self.values.items())
+
+    def set(self, name, value):
+        self.values[name] = value
+        self._pending.append((name, value))
+
+    def poll(self):
+        out, self._pending = self._pending, []
+        return out
+
+    def stop(self):
+        pass
+
+
+def set_stream(text):
+    """Write the fake hw_params ("closed" or a format like the kernel's)."""
+    with open(HW_PARAMS, "w") as f:
+        f.write(text)
 
 
 def reset(**card):
     """A fresh fake card for the next test or scenario."""
     global PW
-    PW = testing.FakePipeWire(**card)
+    PW = testing.FakePipeWire(**dict(dict(rear_rca=True), **card))   # driver 0.10.1: Rear RCA In too
     return PW
 
 
@@ -44,11 +81,15 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     if _done:
         return
     _done = True
-    testing.isolate("sbae9-audiomon", offscreen=offscreen)
+    global HW_PARAMS
+    tmp = testing.isolate("sbae9-audiomon", offscreen=offscreen)
     testing.block_subprocesses()
     testing.TIME_SCALE = time_scale
 
-    from audiomon import capture, core, eventlog, monitor, pipewire
+    from audiomon import capture, core, driverstate, eventlog, monitor, pipewire
+    driverstate.ControlWatcher = FakeControls
+    HW_PARAMS = driverstate.HW_PARAMS = os.path.join(tmp, "hw_params")
+    set_stream("closed")
     pipewire.Graph = current
     pipewire.Linker = lambda: testing.FakeLinker(current)
     capture.Capture = testing.make_fake_capture(current, core.CHANNEL_MAPS, core.RATE, app_name=core.APP_NAME)
@@ -57,6 +98,7 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
         monitor.WIRE_GRACE = 0.3
         monitor.SILENT_AFTER = 0.25
         monitor.PW_RESTART_GRACE = 0.5
+        monitor.SETTLE = 0.5
     if quiet:
         eventlog.print = lambda *a, **k: None   # the log also echoes to stdout
     reset()
