@@ -112,7 +112,8 @@ class Snapshot:
                     id=o["id"], name=name, props=props,
                     desc=props.get("node.description") or props.get("node.nick") or name,
                     media_class=props.get("media.class", ""),
-                    state=info.get("state", ""), error=info.get("error"))
+                    state=info.get("state", ""), error=info.get("error"),
+                    params=info.get("params") or {})
             elif t.endswith(":Port"):
                 direction = info.get("direction") or props.get("port.direction") or ""
                 self.ports[o["id"]] = SimpleNamespace(
@@ -151,15 +152,16 @@ def is_ae9(n):
 
 def find_ae9(snap):
     """Locate the AE-9 nodes. Returns dict key -> node (or None)."""
-    found = {"monitor": None, "wuh": None, "mic": None, "optical": None, "rear_rca": None}
+    found = {"monitor": None, "optical_out": None, "wuh": None, "mic": None,
+             "optical": None, "rear_rca": None}
     for n in sorted(snap.nodes.values(), key=lambda n: n.id):
         if is_ours(n) or not is_ae9(n):
             continue
         name = n.name.lower()
         if n.media_class == "Audio/Sink":
-            if ae9.output_kind(n.props) != "main":
-                continue        # the separate optical output (driver 0.12.0), not speakers / headphones
-            if found["monitor"] is None or ("analog" in name and "analog" not in found["monitor"].name):
+            if ae9.output_kind(n.props) == "optical_out":
+                found["optical_out"] = found["optical_out"] or n
+            elif found["monitor"] is None or ("analog" in name and "analog" not in found["monitor"].name):
                 found["monitor"] = n
         elif n.media_class == "Audio/Source":
             kind = ae9.input_kind(n.props)
