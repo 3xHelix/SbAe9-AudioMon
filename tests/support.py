@@ -62,24 +62,29 @@ def set_stream(text):
         f.write(text)
 
 
-OPTICAL_OUT = "alsa_output.ae9_optical"     # the separate optical output, hw:AE9,4
+OPTICAL_OUT = testing.OPTICAL_OUT     # the separate optical output, hw:AE9,4 (driver 0.12.0)
+OPTICAL_HW_PARAMS = None    # the fake /proc/asound/AE9/pcm4p/sub0/hw_params
+MODULE_PARAMS = None        # the fake /sys/module/.../parameters
+FORMATS = ((testing.SINK, 48000), (testing.OPTICAL_OUT, 48000), (testing.MIC, 96000),
+           (testing.WHAT_U_HEAR, 96000), (testing.OPTICAL, 48000), (testing.REAR_RCA, 48000))
 
 
-def _add_optical_out(pw):
-    """Add the optical output sink the kit's fake predates (config/ae9-optical-out.conf)."""
-    nid = pw._node({"node.name": OPTICAL_OUT, "node.description": "Sound Blaster AE-9 Optical",
-                    "media.class": "Audio/Sink", "api.alsa.path": "hw:AE9,4",
-                    "priority.session": 2000}, state="suspended")
-    pw.objects[nid]["info"]["params"] = {"Format": [
-        {"mediaType": "audio", "mediaSubtype": "raw", "format": "S32LE", "rate": 48000,
-         "channels": 2, "position": ["FL", "FR"]}]}
-    pw._card_nodes.append(nid)
-    for ch in ("FL", "FR"):
-        pw._port(nid, "in", f"playback_{ch}", ch)
-    for ch in ("FL", "FR"):
-        pw._port(nid, "out", f"monitor_{ch}", ch, monitor=True)
+def set_optical_stream(text):
+    """Write the optical PCM's fake hw_params ("closed" or "format: S16_LE ...")."""
+    with open(OPTICAL_HW_PARAMS, "w") as f:
+        f.write(text)
+
+
+def _add_formats(pw):
+    """Give the card's nodes the Format params the real card reports in
+    pw-dump (S32LE), and the optical output a level of its own."""
+    for name, rate in FORMATS:
+        n = pw.node(name)
+        if n:
+            n["info"]["params"] = {"Format": [
+                {"mediaType": "audio", "mediaSubtype": "raw", "format": "S32LE", "rate": rate,
+                 "channels": 2, "position": ["FL", "FR"]}]}
     pw.optical_out_db = None
-
     level_of = pw.level_of
 
     def with_optical(src_nid):
@@ -89,25 +94,15 @@ def _add_optical_out(pw):
         return level_of(src_nid)
 
     pw.level_of = with_optical
-
-    # The kit's fake predates the Format params the app now shows; give the
-    # AE-9 nodes the formats the real card reports (pw-dump: S32LE).
-    for name, rate, ch in ((testing.SINK, 48000, 2), ("alsa_input.pci-0000_06_00.0.analog-stereo", 96000, 2),
-                           ("alsa_input.ae9_what_u_hear", 96000, 2), ("alsa_input.ae9_optical", 48000, 2),
-                           ("alsa_input.ae9_rear_rca", 48000, 2)):
-        n = pw.node(name)
-        if n:
-            n["info"]["params"] = {"Format": [
-                {"mediaType": "audio", "mediaSubtype": "raw", "format": "S32LE", "rate": rate,
-                 "channels": ch, "position": ["FL", "FR"]}]}
     pw._bump()
 
 
 def reset(**card):
     """A fresh fake card for the next test or scenario."""
     global PW
-    PW = testing.FakePipeWire(**dict(dict(rear_rca=True), **card))   # driver 0.10.1: Rear RCA In too
-    _add_optical_out(PW)
+    # driver 0.12.0: Rear RCA In and Optical Out too
+    PW = testing.FakePipeWire(**dict(dict(rear_rca=True, optical_out=True), **card))
+    _add_formats(PW)
     return PW
 
 
@@ -123,7 +118,7 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     if _done:
         return
     _done = True
-    global HW_PARAMS
+    global HW_PARAMS, OPTICAL_HW_PARAMS, MODULE_PARAMS
     tmp = testing.isolate("sbae9-audiomon", offscreen=offscreen)
     testing.block_subprocesses()
     testing.TIME_SCALE = time_scale
@@ -132,6 +127,14 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     driverstate.ControlWatcher = FakeControls
     HW_PARAMS = driverstate.HW_PARAMS = os.path.join(tmp, "hw_params")
     set_stream("closed")
+    OPTICAL_HW_PARAMS = driverstate.OPTICAL_HW_PARAMS = os.path.join(tmp, "optical_hw_params")
+    set_optical_stream("closed")
+    from sbae9kit import ae9
+    MODULE_PARAMS = ae9.MODULE_PARAMS = os.path.join(tmp, "module_params")
+    os.makedirs(MODULE_PARAMS, exist_ok=True)
+    for name, value in (("pcm_bits", "24"), ("cap_bits", "24")):   # as on the real card
+        with open(os.path.join(MODULE_PARAMS, name), "w") as f:
+            f.write(value + "\n")
     pipewire.Graph = current
     pipewire.Linker = lambda: testing.FakeLinker(current)
     capture.Capture = testing.make_fake_capture(current, core.CHANNEL_MAPS, core.RATE, app_name=core.APP_NAME)

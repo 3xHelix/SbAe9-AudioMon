@@ -7,18 +7,24 @@ Blaster AE-9. A debugging companion to
 
 ## Unreleased
 
+For driver 0.12.0's separate optical output. Thanks to DarkNik for the
+Optical Out meter and the format line.
+
 ### Added
 
-- **Optical Out** meter: the separate optical playback output
-  (`alsa_output.ae9_optical`, hw:AE9,4, from the driver's
-  `config/ae9-optical-out.conf`) next to the main output, so what PipeWire
-  sends to the receiver is visible on its own. Passive like the output meter:
-  it never keeps the sink awake.
-- Every meter now shows the stream's **rate and bit depth** under the
-  Peak/RMS/Avg/Max rows, e.g. `48 kHz · 24-bit`. The card's playback depth
-  comes from `pcm_bits` (PCM Bit Depth) and its capture depth from
-  `cap_bits`, so an S32LE stream on a 24-bit card reads 24-bit. App streams
-  show their own format.
+- **Optical Out** meter, next to Output: what PipeWire sends to the separate
+  optical output (hw:AE9,4: `alsa_output.pci-….optical_out` on driver
+  0.12.0+, or `alsa_output.ae9_optical` from the older conf). Passive like the
+  Output meter: it never keeps the sink awake. While nothing plays to it, the
+  optical jack carries the main output and this meter reads silence; its
+  card says "idle: jack carries Output" then.
+- Every meter shows its stream's **rate and bit depth** under the
+  Peak/RMS/Avg/Max rows, e.g. `48 kHz · 24-bit`:
+  - Output: the card's live PCM Bit Depth setting;
+  - Optical Out: the bits on the wire (24 for S32_LE, 16 for S16_LE), or
+    `48 kHz · AC3 passthrough` for AC-3 / DTS passthrough;
+  - the inputs: the driver's `cap_bits`;
+  - app streams: their own format.
 
 ## 0.4.2 (2026-11-08)
 

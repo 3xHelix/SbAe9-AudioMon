@@ -71,9 +71,11 @@ SHORT_NAMES = {"monitor": "Output", "optical_out": "Optical Out", "wuh": "What U
 DETAILS = {
     "monitor": "What PipeWire sends to the AE-9: the card's RCA out in speaker mode, or the "
                "head unit's headphone jacks (3.5 mm and 1/4\") in headphone mode.",
-    "optical_out": "What PipeWire sends to the separate optical output (alsa_output.ae9_optical, "
-                   "hw:AE9,4). Independent of the main output: stereo only, no SBX or EQ, and the "
-                   "card's Master volume doesn't change it.",
+    "optical_out": "What PipeWire sends to the separate optical output (hw:AE9,4: "
+                   "alsa_output.pci-….optical_out on driver 0.12.0+, or alsa_output.ae9_optical "
+                   "from the older conf). Independent of the main output: stereo only, no SBX or EQ, "
+                   "and the card's Master volume doesn't change it. While nothing plays to it, the "
+                   "optical jack carries the main output instead, and this meter reads silence.",
     "wuh": "What the card actually plays, after its DSP (the card's What U Hear loopback, "
            "hw:AE9,2: alsa_input.pci-….what_u_hear from driver 0.11.0's card profile, or "
            "alsa_input.ae9_what_u_hear from the older hand-installed conf).",
@@ -92,23 +94,35 @@ DETAILS = {
 FORMAT_BITS = {"S16": 16, "S24": 24, "S32": 32, "F32": 32, "F64": 64}
 
 
+def node_format(node):
+    """A node's current PipeWire Format param (a dict), or None when idle."""
+    for f in (getattr(node, "params", None) or {}).get("Format") or []:
+        return f
+    return None
+
+
 def format_text(node, bits=None):
     """'48 kHz · 24-bit' for a node's current PipeWire format, '' when idle.
 
     The rate is the node's own; `bits` overrides the sample format's depth
-    where the driver plays fewer bits than the container (the card plays
-    24-bit from an S32LE stream by default)."""
-    for f in (node.params or {}).get("Format") or []:
-        rate = f.get("rate")
-        fmt = str(f.get("format") or "").upper()
-        depth = bits or FORMAT_BITS.get(fmt[:3])
-        parts = []
-        if rate:
-            parts.append(f"{rate / 1000:g} kHz")
+    where the card uses fewer bits than the container (the card plays
+    24-bit from an S32LE stream by default). An IEC958 (passthrough) format
+    reads '48 kHz · AC3 passthrough'."""
+    f = node_format(node)
+    if f is None:
+        return ""
+    parts = []
+    rate = f.get("rate")
+    if rate:
+        parts.append(f"{rate / 1000:g} kHz")
+    if str(f.get("mediaSubtype") or "").lower() == "iec958":
+        codec = str(f.get("iec958Codec") or f.get("codec") or "").upper()
+        parts.append(f"{codec} passthrough".strip())
+    else:
+        depth = bits or FORMAT_BITS.get(str(f.get("format") or "").upper()[:3])
         if depth:
             parts.append(f"{depth}-bit")
-        return " · ".join(parts)
-    return ""
+    return " · ".join(parts)
 
 
 class SilenceDetector:
@@ -343,6 +357,17 @@ class AE9View(QWidget):
         self.onesided.update(now, self.fixed["monitor"].capture, self.fixed["wuh"].capture,
                              not held, held, **setup)
 
+    def _card_bits(self, key, node):
+        """The bits the card itself uses on a fixed tap, or None to go by the
+        stream's sample format."""
+        if key == "monitor":        # the card's PCM Bit Depth, as it is now
+            bits = driverstate.number(self.driver_state.get("PCM Bit Depth"))
+            return int(bits) if bits else None
+        if key == "optical_out":    # what's on the wire: the open PCM, else PipeWire's format
+            fmt = driverstate.read_format(driverstate.OPTICAL_HW_PARAMS)
+            return driverstate.wire_bits(fmt or (node_format(node) or {}).get("format"))
+        return driverstate.capture_bits()
+
     def _settle_for(self, now, which, why):
         until, _ = self.settle.get(which, (0.0, ""))
         if now + SETTLE > until:
@@ -472,9 +497,7 @@ class AE9View(QWidget):
                 panel.set_format("")
                 self._set_wired(key, title, False, "absent")
                 continue
-            bits = (driverstate.playback_bits() if key in ("monitor", "optical_out")
-                    else driverstate.capture_bits())
-            panel.set_format(format_text(node, bits))
+            panel.set_format(format_text(node, self._card_bits(key, node)))
             src = snap.out_ports(node, monitor=(key in ("monitor", "optical_out")))
             want = choose_channels(len(src)) if src else panel.channels
             if want != panel.channels:
@@ -485,6 +508,8 @@ class AE9View(QWidget):
             # some drivers, nothing at all): either way that's "no signal".
             if key == "optical" and (node.state == "error" or (wired and now - panel.last_sound > 0.5)):
                 panel.note = "no signal"
+            elif key == "optical_out" and node.state != "running":
+                panel.note = "idle: jack carries Output"
             elif hold_off:
                 panel.note = "unwired (AE-9 idle)"
             else:

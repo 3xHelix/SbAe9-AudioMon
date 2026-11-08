@@ -21,23 +21,6 @@ from .core import child_cmd
 # What a dropout is most likely to follow, then the speaker setup that can make
 # What U Hear's two sides differ on purpose in DSP mode (names as driver 0.10.0
 # has them).
-def _int_param(name, default):
-    try:
-        return int(ae9.module_param(name))
-    except (TypeError, ValueError):
-        return default
-
-
-def playback_bits():
-    """The bit depth the card plays ("PCM Bit Depth" / pcm_bits, 24 or 32)."""
-    return _int_param("pcm_bits", 24)
-
-
-def capture_bits():
-    """The bit depth the card records (cap_bits, 32 unless the driver says otherwise)."""
-    return _int_param("cap_bits", 32)
-
-
 WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "Headphone Profile", "Head Unit Output",
          "FX Surround Switch", "Bass Redirect Switch",
@@ -49,6 +32,11 @@ SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround 
          "Speaker Distance Front L": "Front L distance", "Speaker Distance Front R": "Front R distance"}
 
 HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0p/sub0/hw_params"
+OPTICAL_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm{ae9.OPTICAL_OUT[1]}p/sub0/hw_params"
+
+# Bits on the optical wire per sample format: S/PDIF carries 24 at most, so the
+# optical PCM's S32_LE is 24-bit there; passthrough (AC-3 / DTS) runs as S16_LE.
+WIRE_BITS = {"S16LE": 16, "S24LE": 24, "S243LE": 24, "S32LE": 24}
 
 _EVENT = re.compile(r"event (\w+): numid=(\d+),iface=\w+,name='(.*)'")
 _ITEM = re.compile(r"; Item #(\d+) '(.*)'")
@@ -97,6 +85,29 @@ def channels(stream):
     """The channel count in a read_hw_params() summary, or None."""
     m = re.search(r"(\d+) ch", stream or "")
     return int(m.group(1)) if m else None
+
+
+def capture_bits():
+    """The bit depth the card records (the driver's cap_bits), or None."""
+    try:
+        return int(ae9.module_param("cap_bits"))
+    except (TypeError, ValueError):
+        return None
+
+
+def wire_bits(fmt):
+    """Bits on the optical wire for a sample format ("S32_LE" or "S32LE"), or None."""
+    return WIRE_BITS.get(str(fmt or "").upper().replace("_", ""))
+
+
+def read_format(path):
+    """The sample format of an open PCM ("S32_LE"), or None while it's closed."""
+    try:
+        with open(path) as f:
+            m = re.search(r"^format: (\S+)", f.read(), re.M)
+    except OSError:
+        return None
+    return m.group(1) if m else None
 
 
 def read_hw_params(path=None):

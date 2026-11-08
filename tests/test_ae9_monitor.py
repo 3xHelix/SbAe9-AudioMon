@@ -392,13 +392,12 @@ class GatedInTheWindow(MonitorTest):
 
 class WithOpticalOut(MonitorTest):
     """Driver 0.12.0's second sink, Optical Out, comes first in pw-dump; the
-    Output meter still takes the main sink."""
-    card = dict(optical_out=True)
+    Output meter still takes the main sink, and Optical Out gets its own."""
 
     def test_output_meter_on_the_main_sink(self):
         self.assertTrue(wait_until(lambda: self.view.present.get("monitor") is not None))
         self.assertEqual(self.view.present["monitor"], self.pw.node(SINK)["id"])
-        self.assertNotIn("optical_out", self.log_text())
+        self.assertEqual(self.view.present["optical_out"], self.pw.node(support.OPTICAL_OUT)["id"])
 
     def test_main_sink_without_analog_in_its_name(self):
         from audiomon import pipewire
@@ -556,9 +555,6 @@ class Glass(MonitorTest):
         self.assertIn("Glass turned on; reopening the window", self.log_text())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class OpticalOut(MonitorTest):
     """The separate optical output gets its own meter, next to the main one."""
@@ -567,6 +563,8 @@ class OpticalOut(MonitorTest):
         panel = self.view.fixed["optical_out"]
         self.assertEqual(panel.title_lbl.text(), "Optical Out")
         self.assertIn("hw:AE9,4", panel.title_lbl.toolTip())
+        self.assertIn("carries the main output", panel.title_lbl.toolTip())
+        self.assertTrue(wait_until(lambda: panel.note == "idle: jack carries Output"))
         self.assertTrue(wait_until(lambda: self.wired("optical_out")))
         self.assertIn(support.OPTICAL_OUT, self.log_text())
 
@@ -588,11 +586,34 @@ class Formats(MonitorTest):
             panel = self.view.fixed[key]
             self.assertTrue(wait_until(lambda p=panel: "kHz" in p.fmt_lbl.text()), key)
             self.assertIn("-bit", panel.fmt_lbl.text(), key)
-        # playback is 24-bit on the card (PCM Bit Depth), capture 32-bit
+        # playback at the card's PCM Bit Depth, optical 24-bit on the wire, capture at cap_bits
         self.assertEqual(self.view.fixed["monitor"].fmt_lbl.text(), "48 kHz · 24-bit")
         self.assertEqual(self.view.fixed["optical_out"].fmt_lbl.text(), "48 kHz · 24-bit")
-        self.assertEqual(self.view.fixed["wuh"].fmt_lbl.text(), "96 kHz · 32-bit")
-        self.assertEqual(self.view.fixed["rear_rca"].fmt_lbl.text(), "48 kHz · 32-bit")
+        self.assertEqual(self.view.fixed["wuh"].fmt_lbl.text(), "96 kHz · 24-bit")
+        self.assertEqual(self.view.fixed["rear_rca"].fmt_lbl.text(), "48 kHz · 24-bit")
+
+    def test_output_follows_pcm_bit_depth(self):
+        panel = self.view.fixed["monitor"]
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 24-bit"))
+        support.CONTROLS.set("PCM Bit Depth", "32-bit")
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 32-bit"))
+
+    def test_optical_bits_on_the_wire(self):
+        panel = self.view.fixed["optical_out"]
+        support.set_optical_stream("access: RW_INTERLEAVED\nformat: S16_LE\nchannels: 2\nrate: 48000 (48000/1)\n")
+        self.addCleanup(support.set_optical_stream, "closed")
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 16-bit"))
+        support.CONTROLS.set("PCM Bit Depth", "32-bit")     # the main output's depth doesn't apply
+        support.set_optical_stream("format: S32_LE\nchannels: 2\nrate: 96000 (96000/1)\n")
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 24-bit"))
+
+    def test_passthrough_shows_the_codec(self):
+        panel = self.view.fixed["optical_out"]
+        node = self.pw.node(support.OPTICAL_OUT)
+        node["info"]["params"] = {"Format": [{"mediaType": "audio", "mediaSubtype": "iec958",
+                                              "iec958Codec": "AC3", "rate": 48000}]}
+        self.pw._bump()
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · AC3 passthrough"))
 
     def test_app_stream_shows_its_format(self):
         sid = self.pw.add_stream("Firefox", "YouTube", -14)
@@ -604,3 +625,7 @@ class Formats(MonitorTest):
         self.pw._bump()
         self.assertTrue(wait_until(lambda: "48 kHz" in panel.fmt_lbl.text()))
         self.assertIn("32-bit", panel.fmt_lbl.text())
+
+
+if __name__ == "__main__":
+    unittest.main()

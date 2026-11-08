@@ -79,6 +79,7 @@ SbAe9-AudioMon finds the AE-9's PipeWire nodes by name/card and wires a meter to
 | Meter | Source | Meter node |
 |-------|--------|-----------|
 | AE-9 Output (monitor) | the AE-9 sink's monitor ports: what PipeWire sends to the card (its RCA out in speaker mode, the head unit's headphone jacks in headphone mode; never the separate Optical Out sink of driver 0.12.0+) | `sbae9-audiomon.ae9.monitor` |
+| AE-9 Optical Out (monitor) | the separate optical output's monitor ports, hw:AE9,4: `alsa_output.pci-….optical_out` on driver 0.12.0+, or `alsa_output.ae9_optical` from the older conf. While nothing plays to it, the optical jack carries the main output and this meter reads silence | `sbae9-audiomon.ae9.optical_out` |
 | AE-9 What U Hear | what the card actually plays, after its DSP (hw:AE9,2): `alsa_input.pci-….what_u_hear` from driver 0.11.0's card profile, or `alsa_input.ae9_what_u_hear` from the older hand-installed conf | `sbae9-audiomon.ae9.wuh` |
 | AE-9 Head Unit Mic / Aux | the head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it (`alsa_input.pci-…analog-stereo`, hw:AE9,0) | `sbae9-audiomon.ae9.mic` |
 | AE-9 Optical In | the card's optical in jack: `alsa_input.pci-….optical_in` on driver 0.11.0+, or `alsa_input.ae9_optical` from the older conf (without light on the jack: "no signal" on older drivers, silence on 0.11.0+) | `sbae9-audiomon.ae9.optical` |
@@ -147,7 +148,7 @@ Thresholds are in `audiomon/gated.py`.
 **Let the AE-9 idle** (on by default). Meters must not stop the card from
 suspending:
 
-- The output-monitor and app-stream meters are passive nodes (`node.passive`),
+- The output-monitor, Optical Out and app-stream meters are passive nodes (`node.passive`),
   so they only receive data while the card is running anyway.
 - What U Hear, the head unit's Mic / Aux, Optical In and Rear RCA In have to actively capture, so they're only
   wired while the AE-9 sink is `running`, and they're unwired as soon as it goes idle.

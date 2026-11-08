@@ -8,7 +8,8 @@ Command's tools/screenshots.py.
 Runs the real window on the fake AE-9 (sbae9kit.testing via tests/support.py),
 so no real card, PipeWire, settings or debug log are touched:
 
-    monitor     music and a browser playing, mic, optical and rear RCA in use
+    monitor     music and a browser playing, something on Optical Out, mic, optical
+                and rear RCA in use
     silent      a silent restart: the output plays, What U Hear stays silent
     log         the Event Log after all that
     settings    the Settings page
@@ -103,6 +104,7 @@ def main():
     music = pw.add_stream("Music Player", "Night Drive.flac", -11)
     pw.add_stream("Firefox", "YouTube", -21)
     pw.mic_db, pw.optical_db, pw.rear_rca_db = -38, -24, -30
+    pw.optical_out_db = -16
     run(2.5)
     shot(w, "monitor")
 
@@ -111,7 +113,7 @@ def main():
     pw.stop_stream(music)
     for sid in list(pw.streams):
         pw.stop_stream(sid)
-    pw.mic_db = pw.optical_db = pw.rear_rca_db = None
+    pw.mic_db = pw.optical_db = pw.rear_rca_db = pw.optical_out_db = None
     run(1.5)
     pw.silent_restart = True
     pw.add_stream("mpv", "1 kHz tone", -18)
