@@ -157,6 +157,8 @@ def find_ae9(snap):
             continue
         name = n.name.lower()
         if n.media_class == "Audio/Sink":
+            if ae9.output_kind(n.props) != "main":
+                continue        # the separate optical output (driver 0.12.0), not speakers / headphones
             if found["monitor"] is None or ("analog" in name and "analog" not in found["monitor"].name):
                 found["monitor"] = n
         elif n.media_class == "Audio/Source":

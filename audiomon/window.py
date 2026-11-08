@@ -15,7 +15,7 @@ from sbae9kit import frame
 from . import __version__, core
 from . import theme as T
 from .core import CONFIG_PATH, save_config
-from . import monitor, onesided
+from . import gated, monitor, onesided
 from .monitor import AE9View, ManualView
 from .theme import app_icon, make_icon, rgba, stylesheet
 from .widgets import StatusDot, hline, label, log_view
@@ -258,6 +258,9 @@ class SettingsPage(Page):
             f"ONE-SIDED: one What U Hear channel silent, noisy or {onesided.LEVEL_SKEW_DB:.0f} dB off while the "
             f"other still matches the output, for over {onesided.ONE_SIDED_AFTER} s; the last "
             f"{onesided.SAVE_SECONDS:.0f} s are saved as a WAV<br>"
+            f"GATED: What U Hear plays in {gated.PERIOD // 2}-frame bursts with gaps between (the driver "
+            f"0.10.x half-speed fault) for over {gated.GATED_AFTER} s; the last "
+            f"{gated.SAVE_SECONDS:.0f} s are saved as a WAV<br>"
             f"Log: {self.win.log.path}<br>Config: {CONFIG_PATH}")
         super().showEvent(e)
 
@@ -415,6 +418,12 @@ class MainWindow(QWidget):
                                      "or off in level) while the other still does. See the Event Log.")
         self.onesided_lbl.hide()
         bl.addWidget(self.onesided_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.gated_lbl = label("GATED", "silentBadge")
+        self.gated_lbl.setToolTip("What U Hear plays in short bursts with gaps between: music at half "
+                                  "speed with a buzz (driver 0.10.x, after a speakers/headphones switch "
+                                  "in DSP mode; fixed in 0.11.0). See the Event Log.")
+        self.gated_lbl.hide()
+        bl.addWidget(self.gated_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         self.dropouts_lbl = label("", "bigValue")
         bl.addWidget(self.dropouts_lbl)
         v.addWidget(bottom)
@@ -432,6 +441,8 @@ class MainWindow(QWidget):
         self._silent_count = 0
         self._onesided = None       # "L" / "R" while ONE-SIDED is flagged
         self._onesided_count = 0
+        self._gated = False
+        self._gated_count = 0
         self._sink_state = None
         self.sync_controls()
         self.monitor.rebuild()
@@ -480,7 +491,8 @@ class MainWindow(QWidget):
         self._sink_state = None
         self._silent = False
         self._onesided = None
-        self._silent_count = self._onesided_count = 0
+        self._gated = False
+        self._silent_count = self._onesided_count = self._gated_count = 0
         self.dropouts_lbl.setText("")
         self._refresh_status()
 
@@ -589,10 +601,17 @@ class MainWindow(QWidget):
         self._onesided_count = count
         self._set_counts()
 
+    def set_gated(self, active, count):
+        self._gated = active
+        self._gated_count = count
+        self._set_counts()
+
     def _set_counts(self):
         text = f"Dropouts: {self._silent_count}"
         if self._onesided_count:
             text += f" · One-sided: {self._onesided_count}"
+        if self._gated_count:
+            text += f" · Gated: {self._gated_count}"
         self.dropouts_lbl.setText(text)
         self._refresh_status()
 
@@ -603,15 +622,17 @@ class MainWindow(QWidget):
             self.dropouts_lbl.setText("")
             self.silent_lbl.hide()
             self.onesided_lbl.hide()
+            self.gated_lbl.hide()
             return
         s = self._sink_state
         colors = {"running": T.OK, "idle": T.WARN, "suspended": T.IDLE}
-        self.dot.set_color(T.DANGER if self._silent or self._onesided else colors.get(s, T.DANGER))
+        self.dot.set_color(T.DANGER if self._silent or self._onesided or self._gated else colors.get(s, T.DANGER))
         self.state_lbl.setText((s or "not found").capitalize())
         self.state_lbl.setToolTip("AE-9 sink state")
         self.silent_lbl.setVisible(self._silent)
         self.onesided_lbl.setText(f"ONE-SIDED {self._onesided or ''}".strip())
         self.onesided_lbl.setVisible(bool(self._onesided))
+        self.gated_lbl.setVisible(self._gated)
         if not self.dropouts_lbl.text():
             self.dropouts_lbl.setText("Dropouts: 0")
 

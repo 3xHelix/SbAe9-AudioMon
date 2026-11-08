@@ -75,6 +75,12 @@ snd_ctl_elem_value_set_boolean = _sig("snd_ctl_elem_value_set_boolean", None, _v
 snd_ctl_elem_value_set_integer = _sig("snd_ctl_elem_value_set_integer", None, _vp, ctypes.c_uint, ctypes.c_long)
 snd_ctl_elem_value_set_enumerated = _sig("snd_ctl_elem_value_set_enumerated", None, _vp, ctypes.c_uint, ctypes.c_uint)
 
+# IEC958 (S/PDIF channel status) values: snd_aes_iec958_t is status[24],
+# subcode[147], pad, dig_subframe[4] = 176 bytes; passed by pointer.
+IEC958_SIZE = 176
+snd_ctl_elem_value_get_iec958 = _sig("snd_ctl_elem_value_get_iec958", None, _vp, ctypes.c_char_p)
+snd_ctl_elem_value_set_iec958 = _sig("snd_ctl_elem_value_set_iec958", None, _vp, ctypes.c_char_p)
+
 snd_ctl_event_malloc = _sig("snd_ctl_event_malloc", ctypes.c_int, _P)
 snd_ctl_read = _sig("snd_ctl_read", ctypes.c_int, _vp, _vp)
 snd_ctl_event_get_type = _sig("snd_ctl_event_get_type", ctypes.c_int, _vp)
@@ -88,7 +94,7 @@ class _PollFd(ctypes.Structure):
 
 snd_ctl_poll_descriptors = _sig("snd_ctl_poll_descriptors", ctypes.c_int, _vp, ctypes.POINTER(_PollFd), ctypes.c_uint)
 
-TYPE_BOOLEAN, TYPE_INTEGER, TYPE_ENUMERATED = 1, 2, 3
+TYPE_BOOLEAN, TYPE_INTEGER, TYPE_ENUMERATED, TYPE_BYTES, TYPE_IEC958 = 1, 2, 3, 4, 5
 EVENT_MASK_VALUE, EVENT_MASK_INFO, EVENT_MASK_ADD = 1, 2, 4
 EVENT_MASK_REMOVE = 0xFFFFFFFF
 
@@ -233,6 +239,29 @@ class Mixer:
         if c.type == TYPE_ENUMERATED:
             return int(snd_ctl_elem_value_get_enumerated(self._val, 0))
         return int(snd_ctl_elem_value_get_integer(self._val, 0))
+
+    def get_iec958(self, name):
+        """The 24 channel-status bytes (AES0..AES23) of an IEC958 control."""
+        self._prep(name)
+        err = snd_ctl_elem_read(self._h, self._val)
+        if err < 0:
+            raise AlsaError(-err, f"read {name}")
+        buf = ctypes.create_string_buffer(IEC958_SIZE)
+        snd_ctl_elem_value_get_iec958(self._val, buf)
+        return buf.raw[:24]
+
+    def set_iec958(self, name, status):
+        """Write an IEC958 control's channel-status bytes (the rest is kept)."""
+        self._prep(name)
+        snd_ctl_elem_read(self._h, self._val)
+        buf = ctypes.create_string_buffer(IEC958_SIZE)
+        snd_ctl_elem_value_get_iec958(self._val, buf)
+        status = bytes(status)[:24]
+        ctypes.memmove(buf, status, len(status))
+        snd_ctl_elem_value_set_iec958(self._val, buf)
+        err = snd_ctl_elem_write(self._h, self._val)
+        if err < 0:
+            raise AlsaError(-err, f"write {name}")
 
     def set(self, name, value):
         """Set every channel of a control. Enums accept index or item name."""

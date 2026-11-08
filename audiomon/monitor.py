@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWi
 
 import os
 
-from . import __version__, core, driverstate, onesided, pipewire
+from . import __version__, core, driverstate, gated, onesided, pipewire
 from .core import CHANNEL_MAPS, FLOOR_DB, choose_channels, fmt_db, save_config
 from .pipewire import Snapshot, find_ae9, is_ours
 from .widgets import MeterPanel, label, log_view
@@ -170,6 +170,9 @@ class AE9View(QWidget):
         self.onesided = onesided.OneSidedDetector(
             self.log, self._silence_changed, note=self._change_note,
             save_dir=os.path.join(os.path.dirname(core.LOG_PATH), "captures"))
+        self.gated = gated.GatedDetector(
+            self.log, self._silence_changed, note=self._change_note,
+            save_dir=os.path.join(os.path.dirname(core.LOG_PATH), "captures"))
         self.controls = driverstate.ControlWatcher()
         self.driver_state = {}      # watched control -> value
         self.last_change = None     # (text, time) of the latest driver change
@@ -261,6 +264,23 @@ class AE9View(QWidget):
             self.silence.update(now, self.fixed["monitor"].tick_peak_db, self.fixed["wuh"].tick_peak_db,
                                 self.wuh_ready_since, self.sink_state or "absent")
 
+        # GATED: like ONE-SIDED below, but not held after a driver change (the
+        # fault starts right after a speakers <-> headphones switch)
+        if pw_held:
+            gate_held = "PipeWire restarted"
+        elif both_why:
+            gate_held = both_why
+        elif self.sink_state != "running":
+            gate_held = f"playback stopped, AE-9 sink {self.sink_state or 'absent'}"
+        elif self.wuh_ready_since is None or now - self.wuh_ready_since < WIRE_GRACE:
+            gate_held = "What U Hear unwired/absent"
+        elif self.silence.active:
+            gate_held = "SILENT"
+        else:
+            gate_held = ""
+        self.gated.update(now, self.fixed["monitor"].capture, self.fixed["wuh"].capture,
+                          not gate_held, gate_held)
+
         # ONE-SIDED: only while What U Hear is wired, settled and not SILENT
         ds = self.driver_state
         dsp = ds.get("Direct Mode Switch") == "off"
@@ -277,6 +297,8 @@ class AE9View(QWidget):
             held = "What U Hear unwired/absent"
         elif self.silence.active:
             held = "SILENT"
+        elif self.gated.active:
+            held = "GATED"
         else:
             held = ""
         num = driverstate.number
@@ -375,9 +397,10 @@ class AE9View(QWidget):
         self.wuh_ready_since = None
 
     def _silence_changed(self):
-        self.fixed["wuh"].alert = self.silence.active or self.onesided.active
+        self.fixed["wuh"].alert = self.silence.active or self.onesided.active or self.gated.active
         self.win.set_silent(self.silence.active, self.silence.count)
         self.win.set_one_sided(self.onesided.side if self.onesided.active else None, self.onesided.count)
+        self.win.set_gated(self.gated.active, self.gated.count)
 
     # -- graph reconciliation ------------------------------------------------
 
@@ -535,6 +558,8 @@ class AE9View(QWidget):
             self.log(f"SILENT #{self.silence.count} still active at exit")
         if self.onesided.active:
             self.log(f"ONE-SIDED {self.onesided.side} #{self.onesided.count} still active at exit")
+        if self.gated.active:
+            self.log(f"GATED #{self.gated.count} still active at exit")
         self.controls.stop()
         self.log("SbAe9-AudioMon AE-9 mode stopped")
         self.log.remove_view(self.logview)

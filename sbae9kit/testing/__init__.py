@@ -73,5 +73,5 @@ def block_subprocesses():
 
 from .pipewire import (  # noqa: E402,F401
     FakeLinker, FakePipeWire, make_fake_capture,
-    MIC, MIC_DESC, OPTICAL, REAR_RCA, SINK, WHAT_U_HEAR, WUH_OFFSET_DB,
+    MIC, MIC_DESC, OPTICAL, OPTICAL_OUT, REAR_RCA, SINK, WHAT_U_HEAR, WUH_OFFSET_DB,
 )

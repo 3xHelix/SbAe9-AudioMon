@@ -63,11 +63,11 @@ blur.</sub>
   Optical In, Rear RCA In) and its state. Hover the title for the full name, the jacks it
   covers and its PipeWire node.
 - **Bottom bar:**
-  - a status dot: green = running, amber = idle, grey = suspended, red = SILENT, ONE-SIDED or card missing;
+  - a status dot: green = running, amber = idle, grey = suspended, red = SILENT, ONE-SIDED, GATED or card missing;
   - the AE-9 sink state;
   - on the Monitor page, quick toggles for the three Settings → Monitoring options
     (Auto-wire, Let idle, Always capture), kept in sync with Settings;
-  - the **SILENT** and **ONE-SIDED** badges;
+  - the **SILENT**, **ONE-SIDED** and **GATED** badges;
   - the dropout count (and the one-sided count, once there's one).
 
 ## Modes
@@ -78,7 +78,7 @@ SbAe9-AudioMon finds the AE-9's PipeWire nodes by name/card and wires a meter to
 
 | Meter | Source | Meter node |
 |-------|--------|-----------|
-| AE-9 Output (monitor) | the AE-9 sink's monitor ports: what PipeWire sends to the card (its RCA out in speaker mode, the head unit's headphone jacks in headphone mode) | `sbae9-audiomon.ae9.monitor` |
+| AE-9 Output (monitor) | the AE-9 sink's monitor ports: what PipeWire sends to the card (its RCA out in speaker mode, the head unit's headphone jacks in headphone mode; never the separate Optical Out sink of driver 0.12.0+) | `sbae9-audiomon.ae9.monitor` |
 | AE-9 What U Hear | what the card actually plays, after its DSP (hw:AE9,2): `alsa_input.pci-….what_u_hear` from driver 0.11.0's card profile, or `alsa_input.ae9_what_u_hear` from the older hand-installed conf | `sbae9-audiomon.ae9.wuh` |
 | AE-9 Head Unit Mic / Aux | the head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it (`alsa_input.pci-…analog-stereo`, hw:AE9,0) | `sbae9-audiomon.ae9.mic` |
 | AE-9 Optical In | the card's optical in jack: `alsa_input.pci-….optical_in` on driver 0.11.0+, or `alsa_input.ae9_optical` from the older conf (without light on the jack: "no signal" on older drivers, silence on 0.11.0+) | `sbae9-audiomon.ae9.optical` |
@@ -130,6 +130,20 @@ the last 3 s are saved as a 4-channel WAV (output L/R, What U Hear L/R, lined
 up) in `~/.local/state/sbae9-audiomon/captures/`, at most 20 per run.
 Thresholds are in `audiomon/onesided.py`.
 
+**GATED flag.** Lights up when What U Hear plays in bursts: 64 frames of
+audio, then 64 frames of silence, 375 times a second, for more than 0.5 s.
+The music sounds half speed with a buzz. It's a driver 0.10.x fault that
+follows a speakers <-> headphones switch in DSP mode (Direct Mode off);
+driver 0.11.0 fixes it. SILENT and ONE-SIDED can't see it, since both sides
+still carry sound. A few times a second it folds the last half second of
+What U Hear onto one 2.667 ms period and measures the share of the energy in
+its quietest half: about 0.5 for steady audio, near 0 when gated. The output
+monitor is measured the same way and must stay near 0.5, so music that
+itself repeats at 375 Hz isn't flagged. Unlike ONE-SIDED, it's judged right
+after a driver setting changes, since that's when the fault starts. The last
+3 s are saved as a WAV (output L/R, What U Hear L/R) like ONE-SIDED's.
+Thresholds are in `audiomon/gated.py`.
+
 **Let the AE-9 idle** (on by default). Meters must not stop the card from
 suspending:
 
@@ -162,11 +176,11 @@ the bottom of the window. Times are local, to the second, to line up with
   `amixer -c AE9`, never written);
 - the playback stream's format, rate and buffer when it opens or changes
   (from `/proc/asound/AE9/pcm0p/sub0/hw_params`);
-- SILENT and ONE-SIDED start and end, and where the WAV was saved.
+- SILENT, ONE-SIDED and GATED start and end, and where the WAV was saved.
 
-SILENT and ONE-SIDED lines and card (re)appearances include the driver version
-and srcversion from `/sys/module/snd_hda_codec_creative_ae9/`. A SILENT or
-ONE-SIDED line also names the driver change that came in the 30 s before it
+SILENT, ONE-SIDED and GATED lines and card (re)appearances include the driver version
+and srcversion from `/sys/module/snd_hda_codec_creative_ae9/`. A SILENT,
+ONE-SIDED or GATED line also names the driver change that came in the 30 s before it
 (`| after: PCM Bit Depth 32-bit → 24-bit, 0.8 s before`).
 
 ### Manual meters
@@ -210,7 +224,7 @@ installed. Re-run it after each tested change.
 | Path | What it is |
 |---|---|
 | `sbae9-audiomon` | The launcher (runs the package from wherever it lives) |
-| `audiomon/` | The app: `core` (constants, config), `pipewire` (graph, linking, AE-9 nodes), `capture` (pw-record meters), `meters`, `monitor` (AE-9 wiring, SILENT), `onesided` (ONE-SIDED), `driverstate` (controls and stream format, read-only), `widgets`, `window`, `theme`, `eventlog` |
+| `audiomon/` | The app: `core` (constants, config), `pipewire` (graph, linking, AE-9 nodes), `capture` (pw-record meters), `meters`, `monitor` (AE-9 wiring, SILENT), `onesided` (ONE-SIDED), `gated` (GATED), `driverstate` (controls and stream format, read-only), `widgets`, `window`, `theme`, `eventlog` |
 | `sbae9kit/` | The shared kit, vendored from SbAe9-Kit by its `tools/sync_kit.py`. Don't edit it here; `tests/test_kit.py` checks it's unchanged. AudioMon never imports its `mixer` (ALSA writes) |
 | `appicon/` | The app icon, 16–512 px, cut by SbAe9-Kit's `tools/make_icons.py` from the artwork `Neon VU Meter Diagnostics.png` (kept outside the repo) |
 | `tests/`, `tools/fake_ae9.py` | Tests and the demo on the fake AE-9 |
@@ -244,6 +258,8 @@ The tests cover:
 - SILENT start and end, with the driver version in the log;
 - ONE-SIDED: silence, static and a level drop on one side, effects on both
   sides passing, the WAV, and the badge;
+- GATED: 64-frame gating at any phase, a 375 Hz tone and quiet audio
+  passing, the WAV, and the badge;
 - driver-state lines and the change named on a SILENT line;
 - the card dropping off and coming back;
 - Optical "no signal";

@@ -354,6 +354,63 @@ class OneSidedInTheWindow(MonitorTest):
         self.assertEqual(self.view.onesided.count, 0)
 
 
+class GatedInTheWindow(MonitorTest):
+    """What U Hear plays in 64-frame bursts (the 0.10.x half-speed fault)."""
+
+    def _feed_gated(self):
+        import numpy as np
+        from audiomon import gated, onesided
+        rng = np.random.default_rng(5)
+        n, lag = int(onesided.KEEP * core.RATE), 1776
+        mon = np.repeat(np.convolve(rng.standard_normal(n + lag), np.ones(8) / 8, "same")[:, None] * 0.3, 2, 1)
+        mon[:, 1] = np.roll(mon[:, 1], 7)
+        on = (np.arange(n) // (gated.PERIOD // 2)) % 2 == 0
+        wuh = mon[:n] * on[:, None]
+        mon = mon[lag:]
+        for key, data in (("monitor", mon), ("wuh", wuh)):
+            self.view.fixed[key].capture.recent = lambda frames, d=data: (d[-frames:], time.monotonic())
+
+    def test_badge_count_and_log(self):
+        self.pw.add_stream("Music Player", "song.flac", -12)
+        self.assertTrue(wait_until(lambda: self.wired("wuh")))
+        self._feed_gated()
+        self.assertTrue(wait_until(lambda: self.view.gated.active, 5))
+        self.assertTrue(self.win.gated_lbl.isVisibleTo(self.win))
+        self.assertEqual(self.win.dropouts_lbl.text(), "Dropouts: 0 · Gated: 1")
+        self.assertTrue(self.view.fixed["wuh"].alert)
+        log = self.log_text()
+        self.assertIn("GATED #1 start: What U Hear plays in 64-frame bursts", log)
+        self.assertIn("saved the last 3 s", log)
+        process(1000)
+        self.assertEqual(self.view.onesided.count, 0)   # not blamed on one side
+
+        self.pw.stop_stream(next(iter(self.pw.streams)))
+        self.assertTrue(wait_until(lambda: not self.view.gated.active, 5))
+        self.assertIn("GATED #1 end", self.log_text())
+        self.assertFalse(self.win.gated_lbl.isVisibleTo(self.win))
+
+
+class WithOpticalOut(MonitorTest):
+    """Driver 0.12.0's second sink, Optical Out, comes first in pw-dump; the
+    Output meter still takes the main sink."""
+    card = dict(optical_out=True)
+
+    def test_output_meter_on_the_main_sink(self):
+        self.assertTrue(wait_until(lambda: self.view.present.get("monitor") is not None))
+        self.assertEqual(self.view.present["monitor"], self.pw.node(SINK)["id"])
+        self.assertNotIn("optical_out", self.log_text())
+
+    def test_main_sink_without_analog_in_its_name(self):
+        from audiomon import pipewire
+        objs = [{"id": i, "type": "PipeWire:Interface:Node",
+                 "info": {"state": "idle", "props": dict(p, **{"media.class": "Audio/Sink"})}}
+                for i, p in ((30, {"node.name": "alsa_output.pci-0000_06_00.0.optical_out",
+                                   "node.description": "AE-9 Optical Out", "api.alsa.path": "hw:AE9,4"}),
+                             (31, {"node.name": "alsa_output.pci-0000_06_00.0.speakers",
+                                   "node.description": "AE-9", "api.alsa.path": "hw:AE9,0"}))]
+        self.assertEqual(pipewire.find_ae9(pipewire.Snapshot(objs))["monitor"].id, 31)
+
+
 class OpticalWithoutLight(MonitorTest):
     let_idle = False
 

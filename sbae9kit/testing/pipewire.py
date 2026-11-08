@@ -46,6 +46,7 @@ WHAT_U_HEAR = "alsa_input.ae9_what_u_hear"
 MIC_DESC = "AE-9 Head Unit Mic / Aux"
 OPTICAL = "alsa_input.ae9_optical"
 REAR_RCA = "alsa_input.ae9_rear_rca"     # the head unit's rear RCA in, hw:AE9,3 (driver 0.10.1)
+OPTICAL_OUT = "alsa_output.pci-0000_06_00.0.optical_out"   # the optical output, hw:AE9,4 (driver 0.12.0)
 WUH_OFFSET_DB = 0.0           # What U Hear is level-exact against the source (a -20 dBFS
                               # peak sine reads -20 peak / -23 RMS, as at the output)
 REAL_SUSPEND_AFTER = 5.0      # PipeWire's default idle -> suspend wait
@@ -55,7 +56,7 @@ class FakePipeWire:
     """The PipeWire graph with the AE-9 in it, plus what it would sound like."""
 
     def __init__(self, card=True, what_u_hear=True, optical=True, rear_rca=False,
-                 fixture="pw_ae9_stereo.json"):
+                 optical_out=False, fixture="pw_ae9_stereo.json"):
         self.fixture = fixture
         self.objects = {}             # id -> pw-dump object
         self._version = 0
@@ -68,6 +69,7 @@ class FakePipeWire:
         self.optical_db = None        # level on a lit Optical In (None = no light: silence)
         self.rear_rca_db = None       # level on the head unit's Rear RCA In (None = silence)
         self.rear_rca = rear_rca      # card_present(True) adds Rear RCA In (driver 0.10.1+)
+        self.optical_out = optical_out  # ...and the Optical Out sink (driver 0.12.0+)
         self.jitter = 0.0             # +/- dB of random wobble on every level (demos)
         self.suspend_after = scaled(REAL_SUSPEND_AFTER)
         self._idle_since = {}
@@ -110,6 +112,17 @@ class FakePipeWire:
             return
         with open(fixture_path(self.fixture)) as f:
             snapshot = json.load(f)
+        if self.optical_out:
+            # added before the main sink (a lower id, first in pw-dump), so an app
+            # that takes the first AE-9 sink gets the wrong one
+            nid = self._node({"node.name": OPTICAL_OUT, "node.description": "AE-9 Optical Out",
+                              "media.class": "Audio/Sink", "api.alsa.path": "hw:AE9,4",
+                              "device.api": "alsa", "alsa.card_name": "AE-9"})
+            self._card_nodes.append(nid)
+            for ch in ("FL", "FR"):
+                self._port(nid, "in", f"playback_{ch}", ch)
+            for ch in ("FL", "FR"):
+                self._port(nid, "out", f"monitor_{ch}", ch, monitor=True)
         for o in snapshot:
             if o.get("type") != "PipeWire:Interface:Node":
                 continue

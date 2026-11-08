@@ -5,6 +5,29 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.2 (2026-11-08)
+
+A GATED flag for driver 0.10.x's half-speed fault, and the Output meter
+ready for driver 0.12.0's optical output. On SbAe9-Kit 0.3.8.
+
+### Added
+
+- **GATED flag**, next to SILENT and ONE-SIDED: What U Hear plays in
+  64-frame bursts with 64-frame gaps between (375 times a second) for over
+  0.5 s. It's the driver 0.10.x fault where music plays at half speed with a
+  buzz after a speakers <-> headphones switch in DSP mode (fixed in driver
+  0.11.0). It shows a badge, a count and a red What U Hear card, logs a
+  `GATED` line with the driver srcversion and the driver change before it,
+  and saves the last 3 s as a WAV in `~/.local/state/sbae9-audiomon/captures/`.
+  The output monitor is checked the same way, so music that itself repeats at
+  375 Hz isn't flagged. ONE-SIDED isn't judged while GATED is up.
+
+### Fixed
+
+- The Output meter never takes driver 0.12.0's separate Optical Out sink
+  (hw:AE9,4) for the main output. It used to pick the first AE-9 sink when
+  none had "analog" in its name. Uses SbAe9-Kit 0.3.8's `ae9.output_kind()`.
+
 ## 0.4.1 (2026-11-08)
 
 For driver 0.11.0, whose card profile opens What U Hear, Optical In and

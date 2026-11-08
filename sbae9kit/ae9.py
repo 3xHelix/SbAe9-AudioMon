@@ -32,6 +32,12 @@ EXTRA_INPUTS = {
 }
 
 
+# The AE-9's separate optical output (driver 0.12.0, hw:AE9,4): the card
+# profile's alsa_output.pci-<addr>.optical_out, or the old drop-in's name.
+# Never the main (analog) output.
+OPTICAL_OUT = ("alsa_output.ae9_optical", 4)
+
+
 def is_app_node(props):
     return str(props.get("node.name", "")).startswith(APP_NODE_PREFIXES)
 
@@ -64,6 +70,19 @@ def input_kind(props):
     if "optical" in name or "optical" in desc or "iec958" in name:
         return "optical_in"
     return "mic"
+
+
+def output_kind(props):
+    """For an AE-9 Audio/Sink: "optical_out" (the separate optical output,
+    hw:AE9,4) or "main" (speakers / headphones, hw:AE9,0)."""
+    name = str(props.get("node.name", "")).lower()
+    desc = str(props.get("node.description", "")).lower()
+    path = str(props.get("api.alsa.path", ""))
+    if name == OPTICAL_OUT[0] or (path.startswith(f"hw:{CARD_ID},") and path.endswith(f",{OPTICAL_OUT[1]}")):
+        return "optical_out"
+    if "optical" in name or "iec958" in name or "optical out" in desc:
+        return "optical_out"
+    return "main"
 
 
 # --- the driver ------------------------------------------------------------------

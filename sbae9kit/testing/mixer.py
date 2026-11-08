@@ -60,6 +60,14 @@ class FakeMixer:
         self.writes.append((name, value))
         self._store(name, value)
 
+    def get_iec958(self, name):
+        return bytes(self.values[name])
+
+    def set_iec958(self, name, status):
+        status = bytes(status)[:24]
+        self.writes.append((name, status))
+        self._store(name, status + bytes(self.values[name])[len(status):])
+
     def subscribe(self):
         return self._r
 
@@ -132,6 +140,11 @@ class FakeMixer:
         """An enum the snapshot doesn't have (e.g. Capture Bit Depth)."""
         return self._add(name, value, type=alsa.TYPE_ENUMERATED, min=0, max=len(items) - 1,
                          items=list(items))
+
+    def add_iec958(self, name="IEC958 Playback Default", status=b"\x04"):
+        """An IEC958 control (driver 0.12.0's optical out: AES0 bit 1 = non-audio)."""
+        return self._add(name, bytes(status).ljust(24, b"\0"), type=alsa.TYPE_IEC958,
+                         min=0, max=0, items=[])
 
     def remove(self, name):
         c = self.controls.pop(name)
