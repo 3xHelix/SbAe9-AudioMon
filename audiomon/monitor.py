@@ -71,13 +71,16 @@ DETAILS = {
     "monitor": "What PipeWire sends to the AE-9: the card's RCA out in speaker mode, or the "
                "head unit's headphone jacks (3.5 mm and 1/4\") in headphone mode.",
     "wuh": "What the card actually plays, after its DSP (the card's What U Hear loopback, "
-           "alsa_input.ae9_what_u_hear).",
+           "hw:AE9,2: alsa_input.pci-….what_u_hear from driver 0.11.0's card profile, or "
+           "alsa_input.ae9_what_u_hear from the older hand-installed conf).",
     "mic": "The head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it "
            "(alsa_input.pci-…analog-stereo).",
-    "optical": "The card's optical in jack (alsa_input.ae9_optical). With no light on the jack "
-               "it reads \"no signal\".",
+    "optical": "The card's optical in jack (alsa_input.pci-….optical_in on driver 0.11.0+, or "
+               "alsa_input.ae9_optical from the older conf). With no light on the jack it reads "
+               "\"no signal\" on older drivers, silence on 0.11.0+.",
     "rear_rca": "The head unit's rear RCA L/R input jacks, recorded alongside the mic "
-                "(alsa_input.ae9_rear_rca, hw:AE9,3; driver 0.10.1+ with config/ae9-rear-rca-in.conf).",
+                "(hw:AE9,3: alsa_input.pci-….rear_rca on driver 0.11.0+, or alsa_input.ae9_rear_rca "
+                "on 0.10.1 with config/ae9-rear-rca-in.conf).",
 }
 
 

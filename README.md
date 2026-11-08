@@ -79,11 +79,14 @@ SbAe9-AudioMon finds the AE-9's PipeWire nodes by name/card and wires a meter to
 | Meter | Source | Meter node |
 |-------|--------|-----------|
 | AE-9 Output (monitor) | the AE-9 sink's monitor ports: what PipeWire sends to the card (its RCA out in speaker mode, the head unit's headphone jacks in headphone mode) | `sbae9-audiomon.ae9.monitor` |
-| AE-9 What U Hear | `alsa_input.ae9_what_u_hear` (what the card actually plays, after its DSP) | `sbae9-audiomon.ae9.wuh` |
+| AE-9 What U Hear | what the card actually plays, after its DSP (hw:AE9,2): `alsa_input.pci-….what_u_hear` from driver 0.11.0's card profile, or `alsa_input.ae9_what_u_hear` from the older hand-installed conf | `sbae9-audiomon.ae9.wuh` |
 | AE-9 Head Unit Mic / Aux | the head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it (`alsa_input.pci-…analog-stereo`, hw:AE9,0) | `sbae9-audiomon.ae9.mic` |
-| AE-9 Optical In | the card's optical in jack, `alsa_input.ae9_optical` (shows "no signal" without light on the jack) | `sbae9-audiomon.ae9.optical` |
-| AE-9 Rear RCA In | the head unit's rear RCA L/R input jacks, `alsa_input.ae9_rear_rca` (hw:AE9,3; driver 0.10.1+ with its `config/ae9-rear-rca-in.conf`, else "not found") | `sbae9-audiomon.ae9.rear_rca` |
+| AE-9 Optical In | the card's optical in jack: `alsa_input.pci-….optical_in` on driver 0.11.0+, or `alsa_input.ae9_optical` from the older conf (without light on the jack: "no signal" on older drivers, silence on 0.11.0+) | `sbae9-audiomon.ae9.optical` |
+| AE-9 Rear RCA In | the head unit's rear RCA L/R input jacks, hw:AE9,3: `alsa_input.pci-….rear_rca` on driver 0.11.0+, or `alsa_input.ae9_rear_rca` on 0.10.1 with its `config/ae9-rear-rca-in.conf` (else "not found") | `sbae9-audiomon.ae9.rear_rca` |
 | one per app stream | every app stream playing to the AE-9 sink, added/removed as they come and go | `sbae9-audiomon.stream.<id>` |
+
+On driver 0.11.0+ the hand-installed What U Hear / Optical / Rear RCA confs aren't needed;
+remove them, or each source shows up twice in PipeWire.
 
 Nodes are re-found and re-wired automatically when the card drops off and comes
 back (PSU cycle, driver reload, suspend).

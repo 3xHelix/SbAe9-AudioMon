@@ -80,14 +80,18 @@
   "type": 3,
   "count": 1,
   "min": 0,
-  "max": 2,
+  "max": 6,
   "items": [
-   "Default",
-   "Fast",
-   "Slow"
+   "Apodizing Fast Roll Off",
+   "Fast Roll Off",
+   "Slow Roll Off",
+   "Fast Roll Off - Minimum Phase",
+   "Slow Roll Off - Minimum Phase",
+   "Hybrid Fast Roll Off",
+   "Brick Wall"
   ],
   "writable": true,
-  "value": 1
+  "value": 0
  },
  {
   "name": "Direct Mode Switch",

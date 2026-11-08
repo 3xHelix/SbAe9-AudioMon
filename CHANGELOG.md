@@ -5,6 +5,24 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.1 (2026-11-08)
+
+For driver 0.11.0, whose card profile opens What U Hear, Optical In and
+Rear RCA In as PipeWire sources by itself. On SbAe9-Kit 0.3.7.
+
+### Changed
+
+- The meters' hover text and the README name the sources driver 0.11.0
+  creates (`alsa_input.pci-….what_u_hear`, `….optical_in`, `….rear_rca`)
+  next to the older hand-installed ones (`alsa_input.ae9_*`). AudioMon
+  already found both.
+- The README says to remove the old hand-installed What U Hear / Optical /
+  Rear RCA confs on driver 0.11.0+, or each source shows up twice.
+- Optical In with no light on the jack reads silence on driver 0.11.0+
+  (older drivers: "no signal").
+- SbAe9-Kit 0.3.7: the fake card's DAC Filter has driver 0.11.0's seven
+  filters (tests only).
+
 ## 0.4.0 (2026-11-07)
 
 For driver 0.10.1: the new Rear RCA In meter, a ONE-SIDED flag for one
