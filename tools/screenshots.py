@@ -33,7 +33,7 @@ import support  # noqa: E402
 W, H = 1320, 860                  # logical size; the PNGs are 2x
 SHOWN_LOG = "~/.local/state/sbae9-audiomon/ae9-debug.log"
 SHOWN_CONFIG = "~/.config/sbae9-audiomon/config.json"
-SHOWN_DRIVER = "snd_hda_codec_creative_ae9 0.12.0 srcversion 97C654E824F80DF717FAC5D"
+SHOWN_DRIVER = "snd_hda_codec_creative_ae9 0.12.2 srcversion D97074682EBE9536970AFB4"
 
 
 def main():
