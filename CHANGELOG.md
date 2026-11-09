@@ -5,7 +5,7 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## Unreleased
+## 0.4.3 (2026-11-08)
 
 For driver 0.12.1: its separate optical output and 5.1 What U Hear. Thanks
 to DarkNikGr for the Optical Out meter and the format line.
