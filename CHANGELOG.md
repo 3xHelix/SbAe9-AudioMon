@@ -5,6 +5,20 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.5 (2026-11-09)
+
+For driver 0.12.3 and later (0.12.4 needs no other change).
+
+### Added
+
+- The Mic / Aux card's format line warns `⚠ broken: Mic Monitor used since
+  power-up (power off to clear)` while Voice Clarity is in a recording after
+  the card's hardware mic monitor has been on since power-up. The driver
+  reports this with the read-only control "Mic Monitor Used Since Power-up":
+  such recordings come out left about 20 dB low and right empty, and only a
+  power-off (or `sudo rtcwake -m mem -s 25`) clears it.
+- The debug log's driver state follows that control (read only).
+
 ## 0.4.4 (2026-11-09)
 
 For driver 0.12.2: Voice Clarity, Mic Monitor, and Headphone / Line Out

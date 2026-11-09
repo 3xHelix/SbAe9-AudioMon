@@ -441,6 +441,20 @@ class Driver0122(MonitorTest):
         self.assertTrue(wait_until(lambda: "Voice Clarity (8 kHz)" in mic.fmt_lbl.text()))
         self.assertIn("Driver: Noise reduction off → on", self.log_text())
 
+    def test_voice_clarity_broken_after_mic_monitor(self):
+        mic = self.view.fixed["mic"]
+        support.CONTROLS.set("Voice Clarity Capture Switch", "on")
+        support.CONTROLS.set("Noise Reduction Capture Switch", "on")
+        support.CONTROLS.set("Mic Monitor Used Since Power-up", "on")
+        process(300)
+        self.assertNotIn("broken", mic.fmt_lbl.text())                  # no recording running
+        support.set_mic_stream("format: S32_LE\nchannels: 2\nrate: 48000 (48000/1)\n")
+        self.assertTrue(wait_until(lambda: "⚠ broken: Mic Monitor used" in mic.fmt_lbl.text()))
+        self.assertIn("Driver: Mic Monitor used since power-up off → on", self.log_text())
+        support.CONTROLS.set("Mic Monitor Used Since Power-up", "off")  # power cycle
+        self.assertTrue(wait_until(lambda: "broken" not in mic.fmt_lbl.text()))
+        self.assertIn("Voice Clarity (8 kHz)", mic.fmt_lbl.text())
+
     def test_mic_monitor_holds_one_sided(self):
         support.CONTROLS.set("Mic Monitor Playback Switch", "on")
         self.pw.add_stream("Music Player", "song.flac", -12)

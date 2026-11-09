@@ -66,7 +66,10 @@ blur.</sub>
   - Output: where it plays (`→ headphones`, `→ RCA out`, or
     `→ RCA out (headphone mix)` with driver 0.12.2's Line Out Virtualization);
   - Mic / Aux: `Voice Clarity (8 kHz)` while the voice processor is in the
-    recording, and `Mic Monitor on` (driver 0.12.2+).
+    recording, and `Mic Monitor on` (driver 0.12.2+). With driver 0.12.3+ it
+    adds `⚠ broken: Mic Monitor used since power-up` when Voice Clarity is
+    recording after the hardware mic monitor has been on: the recording comes
+    out left about 20 dB low and right empty until the card is powered off.
 - **Bottom bar:**
   - a status dot: green = running, amber = idle, grey = suspended, red = SILENT, ONE-SIDED, GATED or card missing;
   - the AE-9 sink state;
@@ -183,7 +186,7 @@ the bottom of the window. Times are local, to the second, to line up with
   Depth, Speaker Config, Headphone Profile, Head Unit Output, Surround, Bass
   Redirect, the front speakers' Level and Distance, Optical Out Mirror, and
   driver 0.12.2's Voice Clarity effects, Mic Monitor and Headphone / Line Out
-  Virtualization (read with `amixer -c AE9`, never written);
+  Virtualization, and driver 0.12.3's Mic Monitor Used Since Power-up (read with `amixer -c AE9`, never written);
 - the playback stream's format, rate and buffer when it opens or changes
   (from `/proc/asound/AE9/pcm0p/sub0/hw_params`);
 - SILENT, ONE-SIDED and GATED start and end, and where the WAV was saved.

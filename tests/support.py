@@ -36,7 +36,7 @@ DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct M
                 "Voice Clarity Capture Switch": "off", "Acoustic Echo Cancellation Capture Switch": "off",
                 "Noise Reduction Capture Switch": "off", "Mic Smart Volume Capture Switch": "off",
                 "Mic EQ Capture Enum": "Off", "Voice Morphing Capture Enum": "Neutral",
-                "Mic Monitor Playback Switch": "off",
+                "Mic Monitor Playback Switch": "off", "Mic Monitor Used Since Power-up": "off",
                 "Headphone Virtualization Switch": "on", "Line Out Virtualization Switch": "off"}
 
 

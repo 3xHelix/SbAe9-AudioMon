@@ -32,6 +32,7 @@ WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "Noise Reduction Capture Switch", "Mic Smart Volume Capture Switch",
          "Mic EQ Capture Enum", "Voice Morphing Capture Enum",
          "Mic Monitor Playback Switch",
+         "Mic Monitor Used Since Power-up",     # driver 0.12.3+: breaks Voice Clarity until power-off
          "Headphone Virtualization Switch", "Line Out Virtualization Switch")
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
@@ -44,6 +45,7 @@ SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround 
          "Mic Smart Volume Capture Switch": "Mic Smart Volume",
          "Mic EQ Capture Enum": "Mic EQ", "Voice Morphing Capture Enum": "Voice morphing",
          "Mic Monitor Playback Switch": "Mic Monitor",
+         "Mic Monitor Used Since Power-up": "Mic Monitor used since power-up",
          "Headphone Virtualization Switch": "Headphone virtualization",
          "Line Out Virtualization Switch": "Line Out virtualization"}
 
