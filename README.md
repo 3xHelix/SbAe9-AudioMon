@@ -59,9 +59,14 @@ blur.</sub>
   the app runs through XWayland for that, since KDE only blurs X11 windows.
   Switching Glass on or off reopens the window, which restarts monitoring for
   about a second, and the debug log says so.
-- **Meter cards:** each shows a short name (Output, What U Hear, Mic / Aux,
-  Optical In, Rear RCA In) and its state. Hover the title for the full name, the jacks it
-  covers and its PipeWire node.
+- **Meter cards:** each shows a short name (Output, Optical Out, What U Hear,
+  Mic / Aux, Optical In, Rear RCA In) and its state. Hover the title for the full name, the jacks it
+  covers and its PipeWire node. Under the numbers, a line shows the stream's
+  rate and bit depth, and what the driver does with it:
+  - Output: where it plays (`→ headphones`, `→ RCA out`, or
+    `→ RCA out (headphone mix)` with driver 0.12.2's Line Out Virtualization);
+  - Mic / Aux: `Voice Clarity (8 kHz)` while the voice processor is in the
+    recording, and `Mic Monitor on` (driver 0.12.2+).
 - **Bottom bar:**
   - a status dot: green = running, amber = idle, grey = suspended, red = SILENT, ONE-SIDED, GATED or card missing;
   - the AE-9 sink state;
@@ -121,7 +126,10 @@ sides alike (SBX, Crystalizer, EQ, Headphone Profile, volume) don't trip it.
 What the card does to one side on purpose in DSP mode (Direct Mode off) is
 allowed for: a Speaker Level difference between Front L and R, the delay a
 Speaker Distance difference asks for, and Bass Redirect taking the lows to
-the sub. It isn't judged on a multichannel stream (What U Hear carries only
+the sub. In the DSP's headphone mode (Headphones, Direct Mode off, Headphone
+Virtualization on; driver 0.12.2+) it uses the looser SBX rules, since a 5.1
+source is folded into L/R there. It isn't judged while Mic Monitor is on
+(What U Hear then carries the mic, which the output doesn't), on a multichannel stream (What U Hear carries only
 the front pair), for 3 s after a stream starts or restarts, or for 3 s after
 a driver setting changes. Switching Direct Mode restarts the stream on
 purpose, so it also holds SILENT off for 3 s, like a PipeWire restart, and
@@ -173,8 +181,9 @@ the bottom of the window. Times are local, to the second, to line up with
 - PipeWire restarts;
 - the driver's state at start, then each change to Direct Mode, SBX, PCM Bit
   Depth, Speaker Config, Headphone Profile, Head Unit Output, Surround, Bass
-  Redirect, the front speakers' Level and Distance, and Optical Out Mirror (read with
-  `amixer -c AE9`, never written);
+  Redirect, the front speakers' Level and Distance, Optical Out Mirror, and
+  driver 0.12.2's Voice Clarity effects, Mic Monitor and Headphone / Line Out
+  Virtualization (read with `amixer -c AE9`, never written);
 - the playback stream's format, rate and buffer when it opens or changes
   (from `/proc/asound/AE9/pcm0p/sub0/hw_params`);
 - SILENT, ONE-SIDED and GATED start and end, and where the WAV was saved.

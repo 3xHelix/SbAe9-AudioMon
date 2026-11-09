@@ -26,15 +26,30 @@ WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "FX Surround Switch", "Bass Redirect Switch",
          "Speaker Level Front L Volume", "Speaker Level Front R Volume",
          "Speaker Distance Front L", "Speaker Distance Front R",
-         "Optical Out Mirror Switch")      # driver 0.12.1+: the optical jack copies the main output
+         "Optical Out Mirror Switch",      # driver 0.12.1+: the optical jack copies the main output
+         # driver 0.12.2+: Voice Clarity on the mic, mic monitoring, headphone mode
+         "Voice Clarity Capture Switch", "Acoustic Echo Cancellation Capture Switch",
+         "Noise Reduction Capture Switch", "Mic Smart Volume Capture Switch",
+         "Mic EQ Capture Enum", "Voice Morphing Capture Enum",
+         "Mic Monitor Playback Switch",
+         "Headphone Virtualization Switch", "Line Out Virtualization Switch")
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
          "Speaker Level Front L Volume": "Front L level", "Speaker Level Front R Volume": "Front R level",
          "Speaker Distance Front L": "Front L distance", "Speaker Distance Front R": "Front R distance",
-         "Optical Out Mirror Switch": "Optical mirror"}
+         "Optical Out Mirror Switch": "Optical mirror",
+         "Voice Clarity Capture Switch": "Voice Clarity",
+         "Acoustic Echo Cancellation Capture Switch": "Echo cancellation",
+         "Noise Reduction Capture Switch": "Noise reduction",
+         "Mic Smart Volume Capture Switch": "Mic Smart Volume",
+         "Mic EQ Capture Enum": "Mic EQ", "Voice Morphing Capture Enum": "Voice morphing",
+         "Mic Monitor Playback Switch": "Mic Monitor",
+         "Headphone Virtualization Switch": "Headphone virtualization",
+         "Line Out Virtualization Switch": "Line Out virtualization"}
 
 HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0p/sub0/hw_params"
 OPTICAL_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm{ae9.OPTICAL_OUT[1]}p/sub0/hw_params"
+MIC_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0c/sub0/hw_params"
 
 # Bits on the optical wire per sample format: S/PDIF carries 24 at most, so the
 # optical PCM's S32_LE is 24-bit there; passthrough (AC-3 / DTS) runs as S16_LE.
@@ -89,6 +104,38 @@ def channels(stream):
     return int(m.group(1)) if m else None
 
 
+def voice_clarity_wanted(ds):
+    """The driver's rule for routing the voice processor into the mic
+    recording (driver 0.12.2): the master on and at least one effect on."""
+    if ds.get("Voice Clarity Capture Switch") != "on":
+        return False
+    return (any(ds.get(n) == "on" for n in ("Acoustic Echo Cancellation Capture Switch",
+                                            "Noise Reduction Capture Switch",
+                                            "Mic Smart Volume Capture Switch"))
+            or ds.get("Mic EQ Capture Enum", "Off") != "Off"
+            or ds.get("Voice Morphing Capture Enum", "Neutral") != "Neutral")
+
+
+def headphone_mode(ds):
+    """The DSP's headphone mode (driver 0.12.2): Headphones, Direct Mode off
+    and Headphone Virtualization on. A 5.1 source is folded into L/R there,
+    and SBX Surround virtualizes."""
+    return (ds.get("Head Unit Output") == "Headphones" and ds.get("Direct Mode Switch") == "off"
+            and ds.get("Headphone Virtualization Switch") == "on")
+
+
+def output_jack(ds):
+    """Where the main output plays, as text, or None if unknown."""
+    hu = ds.get("Head Unit Output")
+    if hu == "Headphones":
+        if ds.get("Line Out Virtualization Switch") == "on" and ds.get("Direct Mode Switch") == "off":
+            return "RCA out (headphone mix)"
+        return "headphones"
+    if hu == "Speakers":
+        return "RCA out"
+    return hu
+
+
 def capture_bits():
     """The bit depth the card records (the driver's cap_bits), or None."""
     try:
@@ -104,9 +151,14 @@ def wire_bits(fmt):
 
 def read_format(path):
     """The sample format of an open PCM ("S32_LE"), or None while it's closed."""
+    return read_field(path, "format")
+
+
+def read_field(path, field):
+    """A field of an open PCM's hw_params ("format", "rate"), or None while it's closed."""
     try:
         with open(path) as f:
-            m = re.search(r"^format: (\S+)", f.read(), re.M)
+            m = re.search(rf"^{field}: (\S+)", f.read(), re.M)
     except OSError:
         return None
     return m.group(1) if m else None

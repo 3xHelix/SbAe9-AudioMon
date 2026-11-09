@@ -159,6 +159,33 @@ class Source:
         self.pos = min(len(self.data), self.pos + int(seconds * RATE))
 
 
+class DriverRules(unittest.TestCase):
+    """driverstate's rules for driver 0.12.2."""
+
+    def test_voice_clarity_rule(self):
+        want = driverstate.voice_clarity_wanted
+        self.assertFalse(want({"Noise Reduction Capture Switch": "on"}))            # master off
+        self.assertFalse(want({"Voice Clarity Capture Switch": "on"}))              # no effect on
+        for k, v in (("Acoustic Echo Cancellation Capture Switch", "on"), ("Noise Reduction Capture Switch", "on"),
+                     ("Mic Smart Volume Capture Switch", "on"), ("Mic EQ Capture Enum", "Radio"),
+                     ("Voice Morphing Capture Enum", "Robot")):
+            self.assertTrue(want({"Voice Clarity Capture Switch": "on", k: v}), k)
+
+    def test_headphone_mode_and_jack(self):
+        ds = {"Head Unit Output": "Headphones", "Direct Mode Switch": "off",
+              "Headphone Virtualization Switch": "on", "Line Out Virtualization Switch": "off"}
+        self.assertTrue(driverstate.headphone_mode(ds))
+        self.assertEqual(driverstate.output_jack(ds), "headphones")
+        self.assertFalse(driverstate.headphone_mode(dict(ds, **{"Direct Mode Switch": "on"})))
+        self.assertFalse(driverstate.headphone_mode(dict(ds, **{"Headphone Virtualization Switch": "off"})))
+        self.assertFalse(driverstate.headphone_mode({"Head Unit Output": "Headphones", "Direct Mode Switch": "off"}))
+        lov = dict(ds, **{"Line Out Virtualization Switch": "on"})
+        self.assertEqual(driverstate.output_jack(lov), "RCA out (headphone mix)")
+        self.assertEqual(driverstate.output_jack(dict(lov, **{"Direct Mode Switch": "on"})), "headphones")
+        self.assertEqual(driverstate.output_jack({"Head Unit Output": "Speakers"}), "RCA out")
+        self.assertIsNone(driverstate.output_jack({}))
+
+
 class Detector(unittest.TestCase):
     def setUp(self):
         self.lines = []

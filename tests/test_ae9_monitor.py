@@ -410,6 +410,47 @@ class WithOpticalOut(MonitorTest):
         self.assertEqual(pipewire.find_ae9(pipewire.Snapshot(objs))["monitor"].id, 31)
 
 
+class Driver0122(MonitorTest):
+    """Driver 0.12.2: Voice Clarity, Mic Monitor, headphone mode and Line Out
+    Virtualization, all read from the controls."""
+
+    def tearDown(self):
+        support.set_mic_stream("closed")
+        super().tearDown()
+
+    def test_output_shows_the_jack(self):
+        out = self.view.fixed["monitor"]
+        self.assertTrue(wait_until(lambda: out.fmt_lbl.text().endswith("→ headphones")))
+        support.CONTROLS.set("Line Out Virtualization Switch", "on")    # needs Direct Mode off
+        process(300)
+        self.assertTrue(out.fmt_lbl.text().endswith("→ headphones"))
+        support.CONTROLS.set("Direct Mode Switch", "off")
+        self.assertTrue(wait_until(lambda: out.fmt_lbl.text().endswith("→ RCA out (headphone mix)")))
+        support.CONTROLS.set("Head Unit Output", "Speakers")
+        self.assertTrue(wait_until(lambda: out.fmt_lbl.text().endswith("→ RCA out")))
+
+    def test_voice_clarity_on_the_mic_while_routed(self):
+        mic = self.view.fixed["mic"]
+        support.CONTROLS.set("Voice Clarity Capture Switch", "on")      # master alone: nothing routed
+        process(300)
+        self.assertNotIn("Voice Clarity", mic.fmt_lbl.text())
+        support.CONTROLS.set("Noise Reduction Capture Switch", "on")
+        process(300)
+        self.assertNotIn("Voice Clarity", mic.fmt_lbl.text())          # no recording running
+        support.set_mic_stream("format: S32_LE\nchannels: 2\nrate: 48000 (48000/1)\n")
+        self.assertTrue(wait_until(lambda: "Voice Clarity (8 kHz)" in mic.fmt_lbl.text()))
+        self.assertIn("Driver: Noise reduction off → on", self.log_text())
+
+    def test_mic_monitor_holds_one_sided(self):
+        support.CONTROLS.set("Mic Monitor Playback Switch", "on")
+        self.pw.add_stream("Music Player", "song.flac", -12)
+        self.assertTrue(wait_until(lambda: self.wired("wuh")))
+        self.assertTrue(wait_until(lambda: "Mic Monitor on" in self.view.fixed["mic"].fmt_lbl.text()))
+        OneSidedInTheWindow._feed_r_silent(self)
+        process(1500)
+        self.assertEqual(self.view.onesided.count, 0)
+
+
 class OpticalWithoutLight(MonitorTest):
     let_idle = False
 
@@ -622,16 +663,16 @@ class Formats(MonitorTest):
             self.assertTrue(wait_until(lambda p=panel: "kHz" in p.fmt_lbl.text()), key)
             self.assertIn("-bit", panel.fmt_lbl.text(), key)
         # playback at the card's PCM Bit Depth, optical 24-bit on the wire, capture at cap_bits
-        self.assertEqual(self.view.fixed["monitor"].fmt_lbl.text(), "48 kHz · 24-bit")
+        self.assertEqual(self.view.fixed["monitor"].fmt_lbl.text(), "48 kHz · 24-bit · → headphones")
         self.assertEqual(self.view.fixed["optical_out"].fmt_lbl.text(), "48 kHz · 24-bit")
         self.assertEqual(self.view.fixed["wuh"].fmt_lbl.text(), "96 kHz · 24-bit")
         self.assertEqual(self.view.fixed["rear_rca"].fmt_lbl.text(), "48 kHz · 24-bit")
 
     def test_output_follows_pcm_bit_depth(self):
         panel = self.view.fixed["monitor"]
-        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 24-bit"))
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 24-bit · → headphones"))
         support.CONTROLS.set("PCM Bit Depth", "32-bit")
-        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 32-bit"))
+        self.assertTrue(wait_until(lambda: panel.fmt_lbl.text() == "48 kHz · 32-bit · → headphones"))
 
     def test_optical_bits_on_the_wire(self):
         panel = self.view.fixed["optical_out"]

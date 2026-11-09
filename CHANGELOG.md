@@ -5,6 +5,32 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## Unreleased
+
+For driver 0.12.2: Voice Clarity, Mic Monitor, and Headphone / Line Out
+Virtualization.
+
+### Added
+
+- The Output card's format line says where the output plays: `→ headphones`,
+  `→ RCA out`, or `→ RCA out (headphone mix)` when Line Out Virtualization
+  sends the headphone mix to the card's RCA out (Headphones, Direct Mode off).
+- The Mic / Aux card's format line shows `Voice Clarity (8 kHz)` while the
+  voice processor is in the recording (the master and at least one effect on,
+  with a 48 kHz recording open), and `Mic Monitor on`.
+- The debug log's driver state follows the new controls: Voice Clarity, Echo
+  cancellation, Noise reduction, Mic Smart Volume, Mic EQ, Voice morphing,
+  Mic Monitor, Headphone virtualization and Line Out virtualization (read
+  only). Custom Headphone Profile names show as the driver names them.
+
+### Changed
+
+- ONE-SIDED uses its looser SBX rules in the DSP's headphone mode
+  (Headphones, Direct Mode off, Headphone Virtualization on), where a 5.1
+  source is folded into L/R, and leaves out the speaker setup there.
+- ONE-SIDED isn't judged while Mic Monitor is on: What U Hear then carries
+  the mic, which the output monitor doesn't.
+
 ## 0.4.3 (2026-11-08)
 
 For driver 0.12.1: its separate optical output and 5.1 What U Hear. Thanks

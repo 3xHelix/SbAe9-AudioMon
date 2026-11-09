@@ -32,7 +32,12 @@ DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct M
                 "FX Surround Switch": "on", "Bass Redirect Switch": "off",
                 "Speaker Level Front L Volume": "+0 dB", "Speaker Level Front R Volume": "+0 dB",
                 "Speaker Distance Front L": "0 cm", "Speaker Distance Front R": "0 cm",
-                "Optical Out Mirror Switch": "off"}
+                "Optical Out Mirror Switch": "off",
+                "Voice Clarity Capture Switch": "off", "Acoustic Echo Cancellation Capture Switch": "off",
+                "Noise Reduction Capture Switch": "off", "Mic Smart Volume Capture Switch": "off",
+                "Mic EQ Capture Enum": "Off", "Voice Morphing Capture Enum": "Neutral",
+                "Mic Monitor Playback Switch": "off",
+                "Headphone Virtualization Switch": "on", "Line Out Virtualization Switch": "off"}
 
 
 class FakeControls:
@@ -65,6 +70,7 @@ def set_stream(text):
 
 OPTICAL_OUT = testing.OPTICAL_OUT     # the separate optical output, hw:AE9,4 (driver 0.12.0)
 OPTICAL_HW_PARAMS = None    # the fake /proc/asound/AE9/pcm4p/sub0/hw_params
+MIC_HW_PARAMS = None        # the fake /proc/asound/AE9/pcm0c/sub0/hw_params
 MODULE_PARAMS = None        # the fake /sys/module/.../parameters
 FORMATS = ((testing.SINK, 48000), (testing.OPTICAL_OUT, 48000), (testing.MIC, 96000),
            (testing.WHAT_U_HEAR, 96000), (testing.OPTICAL, 48000), (testing.REAR_RCA, 48000))
@@ -73,6 +79,12 @@ FORMATS = ((testing.SINK, 48000), (testing.OPTICAL_OUT, 48000), (testing.MIC, 96
 def set_optical_stream(text):
     """Write the optical PCM's fake hw_params ("closed" or "format: S16_LE ...")."""
     with open(OPTICAL_HW_PARAMS, "w") as f:
+        f.write(text)
+
+
+def set_mic_stream(text):
+    """Write the mic PCM's fake hw_params ("closed" or "format: ...\nrate: 48000 ...")."""
+    with open(MIC_HW_PARAMS, "w") as f:
         f.write(text)
 
 
@@ -119,7 +131,7 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     if _done:
         return
     _done = True
-    global HW_PARAMS, OPTICAL_HW_PARAMS, MODULE_PARAMS
+    global HW_PARAMS, OPTICAL_HW_PARAMS, MIC_HW_PARAMS, MODULE_PARAMS
     tmp = testing.isolate("sbae9-audiomon", offscreen=offscreen)
     testing.block_subprocesses()
     testing.TIME_SCALE = time_scale
@@ -130,6 +142,8 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     set_stream("closed")
     OPTICAL_HW_PARAMS = driverstate.OPTICAL_HW_PARAMS = os.path.join(tmp, "optical_hw_params")
     set_optical_stream("closed")
+    MIC_HW_PARAMS = driverstate.MIC_HW_PARAMS = os.path.join(tmp, "mic_hw_params")
+    set_mic_stream("closed")
     from sbae9kit import ae9
     MODULE_PARAMS = ae9.MODULE_PARAMS = os.path.join(tmp, "module_params")
     os.makedirs(MODULE_PARAMS, exist_ok=True)

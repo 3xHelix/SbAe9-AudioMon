@@ -81,7 +81,8 @@ DETAILS = {
            "hw:AE9,2: alsa_input.pci-….what_u_hear from driver 0.11.0's card profile, or "
            "alsa_input.ae9_what_u_hear from the older hand-installed conf).",
     "mic": "The head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it "
-           "(alsa_input.pci-…analog-stereo).",
+           "(alsa_input.pci-…analog-stereo). With Voice Clarity on (driver 0.12.2+), the "
+           "recording runs through the 16 kHz voice processor: 48 kHz, band-limited to 8 kHz.",
     "optical": "The card's optical in jack (alsa_input.pci-….optical_in on driver 0.11.0+, or "
                "alsa_input.ae9_optical from the older conf). With no light on the jack it reads "
                "\"no signal\" on older drivers, silence on 0.11.0+.",
@@ -341,11 +342,17 @@ class AE9View(QWidget):
             held = "SILENT"
         elif self.gated.active:
             held = "GATED"
+        elif ds.get("Mic Monitor Playback Switch") == "on":
+            held = "Mic Monitor on (What U Hear carries the mic)"
         else:
             held = ""
         num = driverstate.number
         setup = {}
-        if dsp:     # the speaker setup only applies in DSP mode
+        if dsp and driverstate.headphone_mode(ds):
+            # headphone mode folds 5.1 into L/R and virtualizes with SBX Surround:
+            # the looser SBX rules; the speaker setup doesn't apply
+            setup["sbx"] = True
+        elif dsp:   # the speaker setup only applies in DSP mode
             setup["sbx"] = ds.get("SBX Switch") == "on"
             lvl = num(ds.get("Speaker Level Front L Volume")), num(ds.get("Speaker Level Front R Volume"))
             if None not in lvl:
@@ -368,6 +375,23 @@ class AE9View(QWidget):
             fmt = driverstate.read_format(driverstate.OPTICAL_HW_PARAMS)
             return driverstate.wire_bits(fmt or (node_format(node) or {}).get("format"))
         return driverstate.capture_bits()
+
+    def _format_notes(self, key):
+        """What the driver does to a tap right now, for its format line."""
+        ds = self.driver_state
+        if key == "monitor":
+            jack = driverstate.output_jack(ds)
+            return [f"→ {jack}"] if jack else []
+        if key == "mic":
+            notes = []
+            # the voice processor goes in at a recording's start (48 kHz only) and out at its stop
+            if (driverstate.voice_clarity_wanted(ds)
+                    and driverstate.read_field(driverstate.MIC_HW_PARAMS, "rate") == "48000"):
+                notes.append("Voice Clarity (8 kHz)")
+            if ds.get("Mic Monitor Playback Switch") == "on":
+                notes.append("Mic Monitor on")
+            return notes
+        return []
 
     def _settle_for(self, now, which, why):
         until, _ = self.settle.get(which, (0.0, ""))
@@ -498,7 +522,8 @@ class AE9View(QWidget):
                 panel.set_format("")
                 self._set_wired(key, title, False, "absent")
                 continue
-            panel.set_format(format_text(node, self._card_bits(key, node)))
+            panel.set_format(" · ".join(t for t in [format_text(node, self._card_bits(key, node))]
+                                        + self._format_notes(key) if t))
             src = snap.out_ports(node, monitor=(key in ("monitor", "optical_out")))
             want = choose_channels(len(src)) if src else panel.channels
             if want != panel.channels:
