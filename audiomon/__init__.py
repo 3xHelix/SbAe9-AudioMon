@@ -15,4 +15,4 @@ Two modes:
 Each meter is a PipeWire capture node created via `pw-record`.
 """
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"

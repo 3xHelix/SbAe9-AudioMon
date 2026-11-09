@@ -5,7 +5,7 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## Unreleased
+## 0.4.4 (2026-11-09)
 
 For driver 0.12.2: Voice Clarity, Mic Monitor, and Headphone / Line Out
 Virtualization.
