@@ -25,11 +25,13 @@ WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "Headphone Profile", "Head Unit Output",
          "FX Surround Switch", "Bass Redirect Switch",
          "Speaker Level Front L Volume", "Speaker Level Front R Volume",
-         "Speaker Distance Front L", "Speaker Distance Front R")
+         "Speaker Distance Front L", "Speaker Distance Front R",
+         "Optical Out Mirror Switch")      # driver 0.12.1+: the optical jack copies the main output
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
          "Speaker Level Front L Volume": "Front L level", "Speaker Level Front R Volume": "Front R level",
-         "Speaker Distance Front L": "Front L distance", "Speaker Distance Front R": "Front R distance"}
+         "Speaker Distance Front L": "Front L distance", "Speaker Distance Front R": "Front R distance",
+         "Optical Out Mirror Switch": "Optical mirror"}
 
 HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0p/sub0/hw_params"
 OPTICAL_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm{ae9.OPTICAL_OUT[1]}p/sub0/hw_params"

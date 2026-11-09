@@ -75,7 +75,9 @@ DETAILS = {
                    "alsa_output.pci-….optical_out on driver 0.12.0+, or alsa_output.ae9_optical "
                    "from the older conf). Independent of the main output: stereo only, no SBX or EQ, "
                    "and the card's Master volume doesn't change it. While nothing plays to it, the "
-                   "optical jack carries the main output instead, and this meter reads silence.",
+                   "optical jack carries the main output instead (with Optical Out Mirror on, driver "
+                   "0.12.1+; always on older drivers) or stays silent (mirror off), and this meter "
+                   "reads silence.",
     "wuh": "What the card actually plays, after its DSP (the card's What U Hear loopback, "
            "hw:AE9,2: alsa_input.pci-….what_u_hear from driver 0.11.0's card profile, or "
            "alsa_input.ae9_what_u_hear from the older hand-installed conf).",
@@ -509,7 +511,9 @@ class AE9View(QWidget):
             if key == "optical" and (node.state == "error" or (wired and now - panel.last_sound > 0.5)):
                 panel.note = "no signal"
             elif key == "optical_out" and node.state != "running":
-                panel.note = "idle: jack carries Output"
+                # driver 0.12.1+ has a mirror switch (off by default); older ones always mirror
+                mirror = self.driver_state.get("Optical Out Mirror Switch", "on")
+                panel.note = "idle: jack carries Output" if mirror == "on" else "idle: silent"
             elif hold_off:
                 panel.note = "unwired (AE-9 idle)"
             else:

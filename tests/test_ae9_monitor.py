@@ -564,9 +564,17 @@ class OpticalOut(MonitorTest):
         self.assertEqual(panel.title_lbl.text(), "Optical Out")
         self.assertIn("hw:AE9,4", panel.title_lbl.toolTip())
         self.assertIn("carries the main output", panel.title_lbl.toolTip())
+        self.assertTrue(wait_until(lambda: panel.note == "idle: silent"))      # 0.12.1: mirror off
+        support.CONTROLS.set("Optical Out Mirror Switch", "on")
         self.assertTrue(wait_until(lambda: panel.note == "idle: jack carries Output"))
         self.assertTrue(wait_until(lambda: self.wired("optical_out")))
         self.assertIn(support.OPTICAL_OUT, self.log_text())
+
+    def test_older_driver_always_mirrors(self):
+        panel = self.view.fixed["optical_out"]
+        self.assertTrue(wait_until(lambda: panel.note == "idle: silent"))
+        del self.view.driver_state["Optical Out Mirror Switch"]     # 0.9-0.12.0 have no switch
+        self.assertTrue(wait_until(lambda: panel.note == "idle: jack carries Output"))
 
     def test_meter_reads_what_pipewire_sends_to_it(self):
         self.pw.optical_out_db = -18

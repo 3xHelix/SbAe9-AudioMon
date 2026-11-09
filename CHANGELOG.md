@@ -15,9 +15,11 @@ Optical Out meter and the format line.
 - **Optical Out** meter, next to Output: what PipeWire sends to the separate
   optical output (hw:AE9,4: `alsa_output.pci-….optical_out` on driver
   0.12.0+, or `alsa_output.ae9_optical` from the older conf). Passive like the
-  Output meter: it never keeps the sink awake. While nothing plays to it, the
-  optical jack carries the main output and this meter reads silence; its
-  card says "idle: jack carries Output" then.
+  Output meter: it never keeps the sink awake. While nothing plays to it, its
+  card says "idle: jack carries Output" when the optical jack copies the
+  main output (Optical Out Mirror on, driver 0.12.1+; always on older
+  drivers), or "idle: silent" when the mirror is off (0.12.1's default).
+  The mirror switch is also in the debug log's driver state (read only).
 - Every meter shows its stream's **rate and bit depth** under the
   Peak/RMS/Avg/Max rows, e.g. `48 kHz · 24-bit`:
   - Output: the card's live PCM Bit Depth setting;

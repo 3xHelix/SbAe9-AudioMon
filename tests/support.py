@@ -31,7 +31,8 @@ DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct M
                 "Head Unit Output": "Headphones", "SBX Switch": "off", "Speaker Config": "2.1",
                 "FX Surround Switch": "on", "Bass Redirect Switch": "off",
                 "Speaker Level Front L Volume": "+0 dB", "Speaker Level Front R Volume": "+0 dB",
-                "Speaker Distance Front L": "0 cm", "Speaker Distance Front R": "0 cm"}
+                "Speaker Distance Front L": "0 cm", "Speaker Distance Front R": "0 cm",
+                "Optical Out Mirror Switch": "off"}
 
 
 class FakeControls:
