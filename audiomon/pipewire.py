@@ -166,7 +166,10 @@ def find_ae9(snap):
         elif n.media_class == "Audio/Source":
             kind = ae9.input_kind(n.props)
             if kind == "what_u_hear":
-                found["wuh"] = found["wuh"] or n
+                # the 5.1 duplex profile's what_u_hear_51 (6 ch) only when there's no stereo one
+                if found["wuh"] is None or (found["wuh"].name.lower().endswith("_51")
+                                            and not name.endswith("_51")):
+                    found["wuh"] = n
             elif kind == "optical_in":
                 found["optical"] = found["optical"] or n
             elif kind == "rear_rca":

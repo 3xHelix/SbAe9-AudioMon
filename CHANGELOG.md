@@ -7,19 +7,22 @@ Blaster AE-9. A debugging companion to
 
 ## Unreleased
 
-For driver 0.12.0's separate optical output. Thanks to DarkNik for the
-Optical Out meter and the format line.
+For driver 0.12.1: its separate optical output and 5.1 What U Hear. Thanks
+to DarkNikGr for the Optical Out meter and the format line.
 
 ### Added
 
 - **Optical Out** meter, next to Output: what PipeWire sends to the separate
-  optical output (hw:AE9,4: `alsa_output.pci-….optical_out` on driver
-  0.12.0+, or `alsa_output.ae9_optical` from the older conf). Passive like the
-  Output meter: it never keeps the sink awake. While nothing plays to it, its
+  optical output (hw:AE9,4: `alsa_output.pci-….optical_out`, "AE-9 Optical
+  Out", driver 0.12.0+). Passive like the Output meter: it never keeps the
+  sink awake. While nothing plays to it, its
   card says "idle: jack carries Output" when the optical jack copies the
   main output (Optical Out Mirror on, driver 0.12.1+; always on older
   drivers), or "idle: silent" when the mirror is off (0.12.1's default).
   The mirror switch is also in the debug log's driver state (read only).
+- What U Hear from driver 0.12.1's 5.1 duplex profile (`what_u_hear_51`,
+  6 channels) gets a 6-channel meter; a stereo What U Hear is preferred if
+  both are there.
 - Every meter shows its stream's **rate and bit depth** under the
   Peak/RMS/Avg/Max rows, e.g. `48 kHz · 24-bit`:
   - Output: the card's live PCM Bit Depth setting;

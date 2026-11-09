@@ -460,6 +460,33 @@ class NoExtraSources(MonitorTest):
         self.assertEqual(self.view.silence.count, 0)   # can't judge without What U Hear
 
 
+class WhatUHear51(MonitorTest):
+    """Driver 0.12.1's 5.1 duplex profile: What U Hear as what_u_hear_51, six channels."""
+    card = dict(what_u_hear=False)
+    WUH51 = "alsa_input.pci-0000_06_00.0.what_u_hear_51"
+
+    def _add(self, name, channels):
+        nid = self.pw._node({"node.name": name, "node.description": "AE-9 What U Hear",
+                             "media.class": "Audio/Source", "api.alsa.path": "hw:AE9,2"})
+        self.pw._card_nodes.append(nid)
+        for ch in channels:
+            self.pw._port(nid, "out", f"capture_{ch}", ch)
+        self.pw._bump()
+        return nid
+
+    def test_six_channels_metered(self):
+        nid = self._add(self.WUH51, core.CHANNEL_MAPS[6])
+        self.assertTrue(wait_until(lambda: self.view.present.get("wuh") == nid))
+        self.pw.add_stream("mpv", "film.mkv", -12)
+        self.assertTrue(wait_until(lambda: self.wired("wuh")))
+        self.assertEqual(self.view.fixed["wuh"].channels, 6)
+
+    def test_stereo_preferred_when_both(self):
+        self._add(self.WUH51, core.CHANNEL_MAPS[6])
+        stereo = self._add("alsa_input.pci-0000_06_00.0.what_u_hear", core.CHANNEL_MAPS[2])
+        self.assertTrue(wait_until(lambda: self.view.present.get("wuh") == stereo))
+
+
 class RearRcaIn(MonitorTest):
     """Driver 0.10.1's Rear RCA In (the head unit's rear RCA jacks): its own
     meter, wired like Mic / Aux only while the AE-9 plays."""

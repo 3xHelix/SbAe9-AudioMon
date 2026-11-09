@@ -72,8 +72,7 @@ DETAILS = {
     "monitor": "What PipeWire sends to the AE-9: the card's RCA out in speaker mode, or the "
                "head unit's headphone jacks (3.5 mm and 1/4\") in headphone mode.",
     "optical_out": "What PipeWire sends to the separate optical output (hw:AE9,4: "
-                   "alsa_output.pci-….optical_out on driver 0.12.0+, or alsa_output.ae9_optical "
-                   "from the older conf). Independent of the main output: stereo only, no SBX or EQ, "
+                   "alsa_output.pci-….optical_out, \"AE-9 Optical Out\", driver 0.12.0+). Independent of the main output: stereo only, no SBX or EQ, "
                    "and the card's Master volume doesn't change it. While nothing plays to it, the "
                    "optical jack carries the main output instead (with Optical Out Mirror on, driver "
                    "0.12.1+; always on older drivers) or stays silent (mirror off), and this meter "
