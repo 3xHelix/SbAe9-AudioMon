@@ -5,6 +5,24 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.6 (2026-11-10)
+
+### Fixed
+
+- PipeWire 1.0.x (Ubuntu 24.04, Linux Mint 22): the meters stayed at
+  "wiring…" and pw-record kept restarting, because 1.0.x has no
+  `pw-record --raw` and no `pw-link --wait`. AudioMon now checks each tool's
+  `--help` once and uses those options only where they exist (1.4 and later
+  need `--raw`, or pw-record writes a sound-file header to stdout). Reported
+  and diagnosed by s3boun3t.
+- A link to a port that went away before it was made (a short desktop sound
+  ending) is no longer logged as "pw-link failed".
+
+### Changed
+
+- When pw-record exits, the meter shows its last error line instead of just
+  "pw-record exited".
+
 ## 0.4.5 (2026-11-09)
 
 For driver 0.12.3 and later (0.12.4 needs no other change).

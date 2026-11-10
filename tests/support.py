@@ -26,6 +26,8 @@ CONTROLS = None     # the fake ControlWatcher of the window made last
 HW_PARAMS = None    # the fake /proc/asound/AE9/pcm0p/sub0/hw_params
 _done = False
 
+REAL = {}   # the real classes, before the fakes replace them
+
 # What driver 0.10.0 starts with on the real machine.
 DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct Mode Switch": "on",
                 "Head Unit Output": "Headphones", "SBX Switch": "off", "Speaker Config": "2.1",
@@ -150,6 +152,8 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     for name, value in (("pcm_bits", "24"), ("cap_bits", "24")):   # as on the real card
         with open(os.path.join(MODULE_PARAMS, name), "w") as f:
             f.write(value + "\n")
+    REAL.setdefault("Linker", pipewire.Linker)      # for tests of the real command lines
+    REAL.setdefault("Capture", capture.Capture)
     pipewire.Graph = current
     pipewire.Linker = lambda: testing.FakeLinker(current)
     capture.Capture = testing.make_fake_capture(current, core.CHANNEL_MAPS, core.RATE, app_name=core.APP_NAME)

@@ -208,9 +208,13 @@ in Settings.
 
 ## Requirements
 
-Python 3, PySide6 (Qt 6), numpy, `pw-record` / `pw-link` / `pw-dump` (pipewire-utils)
-and `amixer` (alsa-utils, for the driver-state lines).
+Python 3, PySide6 (Qt 6), numpy, `pw-record` / `pw-link` / `pw-dump` (PipeWire 1.0
+or later: pipewire-utils on Fedora, pipewire-bin on Debian / Ubuntu) and `amixer`
+(alsa-utils, for the driver-state lines).
 On Fedora: `sudo dnf install python3-pyside6 python3-numpy pipewire-utils alsa-utils`
+On Debian / Ubuntu / Mint: `sudo apt install python3-numpy pipewire-bin alsa-utils`, plus
+PySide6 (`python3-pyside6.qtwidgets` and `python3-pyside6.qtsvg` where your release
+packages them, or `pip install PySide6` in a virtual environment)
 
 ## Run
 

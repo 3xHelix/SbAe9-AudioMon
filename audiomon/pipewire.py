@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 from sbae9kit import ae9
 
-from .core import APP_NAME, CHANNEL_ORDER, child_cmd
+from .core import APP_NAME, CHANNEL_ORDER, child_cmd, has_option
 
 
 class Graph:
@@ -54,7 +54,7 @@ class Graph:
                 proc = subprocess.Popen(child_cmd(["pw-dump", "--monitor", "--no-colors"]),
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             except FileNotFoundError:
-                self.error = "pw-dump not found (install pipewire-utils)"
+                self.error = "pw-dump not found (install pipewire-utils, or pipewire-bin on Debian / Ubuntu)"
                 return
             self._proc = proc
             with self.lock:
@@ -185,10 +185,12 @@ class Linker:
     def __init__(self):
         self.q = queue.Queue()
         self.failures = queue.Queue()
+        # --wait (PipeWire 1.2+) reports a link that fails after creation; 1.0.x lacks it
+        self.wait = ["--wait"] if has_option("pw-link", "--wait") else []
         threading.Thread(target=self._run, daemon=True).start()
 
     def link(self, out_port, in_port):
-        self.q.put(["pw-link", "--wait", str(out_port), str(in_port)])
+        self.q.put(["pw-link", *self.wait, str(out_port), str(in_port)])
 
     def unlink(self, link_id):
         self.q.put(["pw-link", "--disconnect", str(link_id)])
@@ -197,8 +199,11 @@ class Linker:
         while True:
             cmd = self.q.get()
             try:
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                if r.returncode:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=5,
+                                   env=dict(os.environ, LC_ALL="C"))
+                # A port that went away before the link ran (a short desktop sound
+                # ending): nothing to do, the next pass wires whatever is there.
+                if r.returncode and "No such file or directory" not in r.stderr:
                     self.failures.put(f"{' '.join(cmd)}: {r.stderr.strip() or r.returncode}")
             except (OSError, subprocess.TimeoutExpired) as e:
                 self.failures.put(f"{' '.join(cmd)}: {e}")

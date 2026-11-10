@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Constants, dB helpers, config, driver info. No Qt."""
 
+import functools
 import json
 import os
 import shutil
+import subprocess
 import sys
 
 import numpy as np
@@ -73,6 +75,19 @@ def elide(s, n=30):
 def spa_str(s):
     """Make a string safe inside a quoted SPA-JSON property value."""
     return s.replace("\\", "/").replace('"', "'")
+
+
+@functools.lru_cache(maxsize=None)
+def has_option(tool, option):
+    """Whether a PipeWire tool knows a command-line option, from its --help.
+    PipeWire 1.0.x (Ubuntu 24.04, Mint 22) has no `pw-record --raw` and no
+    `pw-link --wait` (1.2+); 1.4+ needs --raw to write raw samples to stdout."""
+    try:
+        r = subprocess.run([tool, "--help"], capture_output=True, text=True, timeout=5,
+                           env=dict(os.environ, LC_ALL="C"))
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return option in r.stdout + r.stderr
 
 
 def child_cmd(cmd):

@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Capture: one pw-record process = one PipeWire meter node."""
 
+import collections
 import subprocess
 import threading
 import time
 
 import numpy as np
 
-from .core import APP_NAME, BLOCK, CHANNEL_MAPS, RATE, child_cmd, spa_str
+from .core import APP_NAME, BLOCK, CHANNEL_MAPS, RATE, child_cmd, has_option, spa_str
 
 
 class Capture:
@@ -93,7 +94,10 @@ class Capture:
             + "}"
         )
         return child_cmd([
-            "pw-record", "--raw", "--format", "f32",
+            # PipeWire 1.4+ needs --raw for raw samples on stdout (else a .snd
+            # header and big-endian floats); 1.0.x writes raw and lacks the option
+            "pw-record", *(["--raw"] if has_option("pw-record", "--raw") else []),
+            "--format", "f32",
             "--rate", str(RATE),
             "--channels", str(self.channels),
             "--channel-map", ",".join(CHANNEL_MAPS[self.channels]),
@@ -103,17 +107,29 @@ class Capture:
             "-",
         ])
 
+    @staticmethod
+    def _drain(stream, errors):
+        """Keep pw-record's last stderr lines, so a failure says why."""
+        for line in iter(stream.readline, b""):
+            line = line.decode(errors="replace").strip()
+            if line:
+                errors.append(line)
+        stream.close()
+
     def _run(self):
         n = self.channels
         chunk = BLOCK * n * 4
         while not self._stopping:
             try:
                 proc = subprocess.Popen(self._command(), stdout=subprocess.PIPE,
-                                        stderr=subprocess.DEVNULL)
+                                        stderr=subprocess.PIPE)
             except FileNotFoundError:
-                self.error = "pw-record not found (install pipewire-utils)"
+                self.error = "pw-record not found (install pipewire-utils, or pipewire-bin on Debian / Ubuntu)"
                 return
             self._proc = proc
+            errors = collections.deque(maxlen=3)
+            drain = threading.Thread(target=self._drain, args=(proc.stderr, errors), daemon=True)
+            drain.start()
             if self._stopping:
                 proc.terminate()
             while True:
@@ -133,8 +149,10 @@ class Capture:
                     self.last_data = time.monotonic()
                     self._keep(a)
             proc.wait()
+            drain.join(1.0)
             if not self._stopping:
-                self.error = "pw-record exited, restarting..."
+                why = errors[-1] if errors else f"exit {proc.returncode}"
+                self.error = f"pw-record exited ({why}), restarting..."
                 time.sleep(1.0)
                 self.error = None
 
