@@ -388,8 +388,9 @@ class AE9View(QWidget):
             if (driverstate.voice_clarity_wanted(ds)
                     and driverstate.read_field(driverstate.MIC_HW_PARAMS, "rate") == "48000"):
                 notes.append("Voice Clarity (8 kHz)")
-                # driver 0.12.3: once the hardware mic monitor has been on, Voice
+                # drivers 0.12.3-0.12.6: once the hardware mic monitor has been on, Voice
                 # Clarity records left ~20 dB low and right empty until a power-off
+                # (0.12.7 fixes it: the control always reads off)
                 if ds.get("Mic Monitor Used Since Power-up") == "on":
                     notes.append("⚠ broken: Mic Monitor used since power-up (power off to clear)")
             if ds.get("Mic Monitor Playback Switch") == "on":

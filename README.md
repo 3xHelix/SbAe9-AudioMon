@@ -66,10 +66,12 @@ blur.</sub>
   - Output: where it plays (`→ headphones`, `→ RCA out`, or
     `→ RCA out (headphone mix)` with driver 0.12.2's Line Out Virtualization);
   - Mic / Aux: `Voice Clarity (8 kHz)` while the voice processor is in the
-    recording, and `Mic Monitor on` (driver 0.12.2+). With driver 0.12.3+ it
-    adds `⚠ broken: Mic Monitor used since power-up` when Voice Clarity is
-    recording after the hardware mic monitor has been on: the recording comes
-    out left about 20 dB low and right empty until the card is powered off.
+    recording, and `Mic Monitor on` (driver 0.12.2+). With drivers 0.12.3 to
+    0.12.6 it adds `⚠ broken: Mic Monitor used since power-up` when Voice
+    Clarity is recording after the hardware mic monitor has been on: the
+    recording comes out left about 20 dB low and right empty until the card is
+    powered off. Driver 0.12.7 fixes this (the control always reads off there),
+    so the warning never shows.
 - **Bottom bar:**
   - a status dot: green = running, amber = idle, grey = suspended, red = SILENT, ONE-SIDED, GATED or card missing;
   - the AE-9 sink state;
@@ -195,6 +197,13 @@ SILENT, ONE-SIDED and GATED lines and card (re)appearances include the driver ve
 and srcversion from `/sys/module/snd_hda_codec_creative_ae9/`. A SILENT,
 ONE-SIDED or GATED line also names the driver change that came in the 30 s before it
 (`| after: PCM Bit Depth 32-bit → 24-bit, 0.8 s before`).
+
+**Reporting a fault.** Attach the debug log, any saved WAVs, and the output of
+`sudo ae9-full-dump` (from SbAe9-Drv; driver 0.12.6+ adds a "Driver state"
+section). AudioMon doesn't read the driver's debugfs itself (it's root-only).
+The meters measure digital levels: PipeWire and What U Hear. A fault only at
+the analog out (silent, quiet or metallic speakers or headphones while every
+meter looks normal) doesn't show on them, so the dump is what shows it.
 
 ### Manual meters
 
