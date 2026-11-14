@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
 import os
+import shutil
 
 from . import __version__, core, driverstate, gated, onesided, pipewire
 from .core import CHANNEL_MAPS, FLOOR_DB, choose_channels, fmt_db, save_config
@@ -187,6 +188,16 @@ class SilenceDetector:
             self.on_change()
 
 
+def stopped_notice():
+    """What to do once the card stopped answering: driver 0.12.9's ae9-reload
+    when it's installed, else the steps SbAe9-SBC shows."""
+    if shutil.which("ae9-reload"):
+        return ("The AE-9 stopped answering. AudioMon has let go of the card. Reload the "
+                "driver with: ae9-reload (in a terminal), or power the PC off.")
+    return ("The AE-9 stopped answering. AudioMon has let go of the card so the driver can be "
+            "reloaded: reload the driver or power the PC off (SbAe9-SBC shows the steps).")
+
+
 class AE9View(QWidget):
     """Auto-wires meters to the AE-9 and watches for dropouts."""
 
@@ -229,6 +240,10 @@ class AE9View(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
+
+        self.card_notice = label("", "cardNotice", wrap=True)
+        self.card_notice.hide()
+        layout.addWidget(self.card_notice)
 
         row = QHBoxLayout()
         row.setSpacing(14)
@@ -426,6 +441,8 @@ class AE9View(QWidget):
                 self._settle_for(now, "onesided", f"settling after {text}")
                 if name == "Direct Mode Switch":    # the driver restarts the running stream
                     self._settle_for(now, "both", f"Direct Mode switched {value}")
+            if name == driverstate.CARD_ANSWERING:
+                self._card_answering(value == "on", old is None)
         if self.first_state and (len(self.first_state) >= len(driverstate.WATCH)
                                  or now - self.first_since > 1.0):
             self.log("Driver state: " + ", ".join(f"{driverstate.short(n)} {v}"
@@ -445,6 +462,16 @@ class AE9View(QWidget):
                 else:
                     self.log(f"AE-9 stream: {fmt}")
                 self.stream_format = fmt
+
+    def _card_answering(self, answering, first):
+        """Show (or clear) the notice that the card stopped answering."""
+        if not answering:
+            text = stopped_notice()
+            self.card_notice.setText(text)
+            self.log(text.replace("The AE-9 stopped answering.", "AE-9 stopped answering:", 1))
+        elif not first:
+            self.log("AE-9 answering again (driver reloaded): following its controls again")
+        self.card_notice.setVisible(not answering)
 
     def _change_note(self, now):
         """' | after: <change>, 1.2 s before' for a dropout line, when a driver

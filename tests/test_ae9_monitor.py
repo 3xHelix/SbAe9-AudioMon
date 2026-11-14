@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import support  # noqa: E402
@@ -17,7 +18,7 @@ support.setup()
 from sbae9kit import desktop, testing  # noqa: E402
 from sbae9kit.testing import MIC, OPTICAL, SINK, WHAT_U_HEAR  # noqa: E402
 
-from audiomon import core, eventlog  # noqa: E402
+from audiomon import core, eventlog, monitor  # noqa: E402
 from audiomon import theme as T  # noqa: E402
 from audiomon.window import MainWindow  # noqa: E402
 
@@ -454,6 +455,23 @@ class Driver0122(MonitorTest):
         support.CONTROLS.set("Mic Monitor Used Since Power-up", "off")  # power cycle
         self.assertTrue(wait_until(lambda: "broken" not in mic.fmt_lbl.text()))
         self.assertIn("Voice Clarity (8 kHz)", mic.fmt_lbl.text())
+
+    def test_card_stops_answering(self):
+        notice = self.view.card_notice
+        process(300)
+        self.assertTrue(notice.isHidden())
+        support.CONTROLS.set("Card Answering", "off")
+        self.assertTrue(wait_until(lambda: not notice.isHidden()))
+        self.assertIn("AE-9 stopped answering: AudioMon has let go of the card", self.log_text())
+        support.CONTROLS.set("Card Answering", "on")       # the driver was reloaded
+        self.assertTrue(wait_until(lambda: notice.isHidden()))
+        self.assertIn("AE-9 answering again", self.log_text())
+
+    def test_stopped_notice_names_ae9_reload(self):
+        with mock.patch.object(monitor.shutil, "which", lambda name: f"/usr/bin/{name}"):
+            self.assertIn("Reload the driver with: ae9-reload", monitor.stopped_notice())
+        with mock.patch.object(monitor.shutil, "which", lambda name: None):
+            self.assertIn("SbAe9-SBC shows the steps", monitor.stopped_notice())
 
     def test_mic_monitor_holds_one_sided(self):
         support.CONTROLS.set("Mic Monitor Playback Switch", "on")

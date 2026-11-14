@@ -39,7 +39,8 @@ DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct M
                 "Noise Reduction Capture Switch": "off", "Mic Smart Volume Capture Switch": "off",
                 "Mic EQ Capture Enum": "Off", "Voice Morphing Capture Enum": "Neutral",
                 "Mic Monitor Playback Switch": "off", "Mic Monitor Used Since Power-up": "off",
-                "Headphone Virtualization Switch": "on", "Line Out Virtualization Switch": "off"}
+                "Headphone Virtualization Switch": "on", "Line Out Virtualization Switch": "off",
+                "Card Answering": "on"}
 
 
 class FakeControls:
@@ -139,6 +140,7 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     testing.TIME_SCALE = time_scale
 
     from audiomon import capture, core, driverstate, eventlog, monitor, pipewire
+    REAL.setdefault("ControlWatcher", driverstate.ControlWatcher)
     driverstate.ControlWatcher = FakeControls
     HW_PARAMS = driverstate.HW_PARAMS = os.path.join(tmp, "hw_params")
     set_stream("closed")

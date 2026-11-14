@@ -33,7 +33,9 @@ WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "Mic EQ Capture Enum", "Voice Morphing Capture Enum",
          "Mic Monitor Playback Switch",
          "Mic Monitor Used Since Power-up",     # drivers 0.12.3-0.12.6: Voice Clarity broken until power-off (0.12.7 fixes it, always off)
-         "Headphone Virtualization Switch", "Line Out Virtualization Switch")
+         "Headphone Virtualization Switch", "Line Out Virtualization Switch",
+         "Card Answering")      # driver 0.12.9+: off once the card stops answering
+CARD_ANSWERING = "Card Answering"
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
          "Speaker Level Front L Volume": "Front L level", "Speaker Level Front R Volume": "Front R level",
@@ -47,11 +49,14 @@ SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround 
          "Mic Monitor Playback Switch": "Mic Monitor",
          "Mic Monitor Used Since Power-up": "Mic Monitor used since power-up",
          "Headphone Virtualization Switch": "Headphone virtualization",
-         "Line Out Virtualization Switch": "Line Out virtualization"}
+         "Line Out Virtualization Switch": "Line Out virtualization",
+         "Card Answering": "Card answering"}
 
 HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0p/sub0/hw_params"
 OPTICAL_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm{ae9.OPTICAL_OUT[1]}p/sub0/hw_params"
 MIC_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0c/sub0/hw_params"
+# Polled (never opened) while the card isn't answering, to see the driver reload
+RELOAD_PATHS = (ae9.MODULE, f"/proc/asound/{ae9.CARD_ID}")
 
 # Bits on the optical wire per sample format: S/PDIF carries 24 at most, so the
 # optical PCM's S32_LE is 24-bit there; passthrough (AC-3 / DTS) runs as S16_LE.
@@ -191,12 +196,18 @@ def read_hw_params(path=None):
 class ControlWatcher:
     """Follows the watched controls. poll() returns the (name, value) pairs
     seen since the last call: every watched control once at the start (and
-    whenever the card comes back), then each change."""
+    whenever the card comes back), then each change.
+
+    When "Card Answering" (driver 0.12.9+) goes off, it lets go of the card:
+    amixer exits and nothing opens the card again until the driver has been
+    unloaded and loaded, so `modprobe -r` isn't blocked by AudioMon. Older
+    drivers don't have the control: the card counts as answering."""
 
     def __init__(self, card=ae9.CARD_ID, watch=WATCH):
         self.card = card
         self.watch = set(watch)
         self.error = None
+        self.released = False       # let go of the card: it stopped answering
         self._q = queue.Queue()
         self._stopping = False
         self._proc = None
@@ -231,11 +242,33 @@ class ControlWatcher:
                 if not ev or ev[2] not in self.watch or ev[0] not in ("add", "value"):
                     continue
                 value = self._cget(ev[1])
-                if value is not None:
+                if value is None:
+                    continue
+                if ev[2] == CARD_ANSWERING and value == "off":
+                    self.released = True    # before the queue, so poll() sees it with the value
                     self._q.put((ev[2], value))
+                    proc.terminate()        # let go of the card's control device
+                    break
+                self._q.put((ev[2], value))
             proc.wait()
-            if not self._stopping:
+            if self.released:
+                self._wait_for_reload()
+                self.released = False
+            elif not self._stopping:
                 time.sleep(3.0)     # no card (or it went away): try again
+
+    def _wait_for_reload(self, every=0.5):
+        """Wait, without opening the card, until the driver has gone away and
+        come back (its module and the card in /proc/asound)."""
+        gone = False
+        while not self._stopping:
+            present = all(os.path.exists(p) for p in RELOAD_PATHS)
+            if not present:
+                gone = True
+            elif gone:
+                time.sleep(1.0)     # let the new card instance settle
+                return
+            time.sleep(every)
 
     def stop(self):
         self._stopping = True

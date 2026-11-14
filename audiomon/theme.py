@@ -196,6 +196,7 @@ def stylesheet():
 #sectionTitle {{ font-size: 15px; font-weight: 700; }}
 #cardTitle {{ font-size: 15px; font-weight: 700; }}
 #muted, #hint {{ color: {MUTED}; font-size: 13px; }}
+#cardNotice {{ color: {DANGER}; font-size: 14px; font-weight: 700; }}
 #bigValue {{ font-size: 15px; font-weight: 700; }}
 #profileLabel {{ font-size: 20px; font-weight: 600; }}
 #logo {{ font-size: 26px; font-weight: 900; font-style: italic; color: {TEXT}; letter-spacing: 1px; }}

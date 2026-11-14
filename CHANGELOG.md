@@ -5,6 +5,22 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.7 (2026-11-14)
+
+For [driver 0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9).
+
+### Added
+
+- When driver 0.12.9's read-only "Card Answering" control goes off, AudioMon
+  lets go of the card so the driver can be reloaded while it's open: the
+  `amixer -c AE9 events` watcher exits and nothing opens the card until the
+  driver has been unloaded and loaded (watched through `/sys/module` and
+  `/proc/asound` only). A red notice above the meters says the card stopped
+  answering and how to recover: `ae9-reload` (driver 0.12.9's tool) when it's
+  installed, else the steps SbAe9-SBC shows, or a power-off. The debug log
+  records it. Older drivers don't have the
+  control: the card counts as answering.
+
 ## 0.4.6 (2026-11-10)
 
 ### Fixed
