@@ -54,6 +54,14 @@ HEALTH_FIELDS = (       # (short text, tooltip text, a warning when > 0)
                           "-1 until first measured)", False),
 )
 SLOTS_LOW = 10
+
+# driver 0.12.13+: ae9-reload writes its PID here while it reloads the driver.
+# AudioMon lets go of the card for as long as that reload runs.
+RELOAD_NOTICE = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}",
+                             "ae9-reload")
+RELOAD = "ae9-reload"           # poll() name for "released" / "reopened"
+NOTICE_EVERY = 0.25             # seconds between checks (ae9-reload waits 5 s)
+NOTICE_MAX_UNREADABLE = 120.0   # an empty or unreadable notice counts this long
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
          "Speaker Level Front L Volume": "Front L level", "Speaker Level Front R Volume": "Front R level",
@@ -117,6 +125,33 @@ def health_text(vals):
     slots = "not measured yet" if vals[7] < 0 else str(vals[7])
     return (f"Driver health: {head} · late replies {vals[5]} (max {vals[6]} µs) · "
             f"free router slots {slots}"), bool(problems)
+
+
+class ReloadNotice:
+    """Whether an ae9-reload is running: its notice file exists and the PID in
+    it is alive. A stale file (the PID is gone) doesn't count; an empty or
+    unreadable one counts for at most NOTICE_MAX_UNREADABLE seconds."""
+
+    def __init__(self, path=None):
+        self.path = path or RELOAD_NOTICE
+        self._unreadable_since = None
+
+    def active(self, now=None):
+        now = time.monotonic() if now is None else now
+        try:
+            with open(self.path) as f:
+                text = f.read().strip()
+        except FileNotFoundError:
+            self._unreadable_since = None
+            return False
+        except OSError:
+            text = ""
+        if text.isdigit():
+            self._unreadable_since = None
+            return os.path.exists(f"/proc/{int(text)}")
+        if self._unreadable_since is None:
+            self._unreadable_since = now
+        return now - self._unreadable_since < NOTICE_MAX_UNREADABLE
 
 
 def short(name):
@@ -249,19 +284,40 @@ class ControlWatcher:
     When "Card Answering" (driver 0.12.9+) goes off, it lets go of the card:
     amixer exits and nothing opens the card again until the driver has been
     unloaded and loaded, so `modprobe -r` isn't blocked by AudioMon. Older
-    drivers don't have the control: the card counts as answering."""
+    drivers don't have the control: the card counts as answering.
+
+    It also lets go while ae9-reload runs (driver 0.12.13+ writes a notice
+    file for that), and opens the card again once the reload is over."""
 
     def __init__(self, card=ae9.CARD_ID, watch=WATCH):
         self.card = card
         self.watch = set(watch) | {HEALTH}
         self.error = None
         self._health = None         # (numid, last value) once the control is seen
-        self.released = False       # let go of the card: it stopped answering
+        self.released = False       # let go of the card: it stopped answering, or a reload
+        self._reload = False        # ...and it's for an ae9-reload
+        self.notice = ReloadNotice()
         self._q = queue.Queue()
         self._stopping = False
         self._proc = None
         threading.Thread(target=self._run, daemon=True).start()
         threading.Thread(target=self._poll_health, daemon=True).start()
+        threading.Thread(target=self._watch_notice, daemon=True).start()
+
+    def _watch_notice(self):
+        """Let go of the card as soon as an ae9-reload starts."""
+        while not self._stopping:
+            time.sleep(NOTICE_EVERY)
+            if not self.released and self.notice.active():
+                self._release_for_reload()
+
+    def _release_for_reload(self):
+        self._reload = True
+        self.released = True
+        self._q.put((RELOAD, "released"))
+        proc = self._proc
+        if proc and proc.poll() is None:
+            proc.terminate()
 
     def _poll_health(self):
         """Read Driver Health every few seconds: its late-reply counters change
@@ -293,6 +349,11 @@ class ControlWatcher:
 
     def _run(self):
         while not self._stopping:
+            if not self.released and self.notice.active():
+                self._release_for_reload()      # don't even start amixer
+            if self.released:
+                self._wait_released()
+                continue
             try:
                 proc = subprocess.Popen(child_cmd(["amixer", "-c", self.card, "events"]),
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -303,6 +364,8 @@ class ControlWatcher:
             self._proc = proc
             for line in proc.stdout:
                 ev = parse_event(line)
+                if self.released:
+                    break
                 if not ev or ev[2] not in self.watch or ev[0] not in ("add", "value"):
                     continue
                 value = self._cget(ev[1])
@@ -316,13 +379,35 @@ class ControlWatcher:
                 if ev[2] == HEALTH:
                     self._health = (ev[1], value)
                 self._q.put((ev[2], value))
+            if proc.poll() is None:
+                proc.terminate()    # released while amixer was starting
             proc.wait()
             self._health = None
             if self.released:
-                self._wait_for_reload()
-                self.released = False
+                self._wait_released()
             elif not self._stopping:
                 time.sleep(3.0)     # no card (or it went away): try again
+
+    def _wait_released(self):
+        """Hold off the card until it's safe to open it again."""
+        if self._reload:
+            self._wait_for_reload_notice()
+        else:
+            self._wait_for_reload()
+        if not self._stopping:
+            if self._reload:
+                self._q.put((RELOAD, "reopened"))
+            self._reload = False
+            self.released = False
+
+    def _wait_for_reload_notice(self):
+        """Wait until the ae9-reload is over (its notice gone, or its PID dead),
+        then for the module and the card to be there."""
+        while not self._stopping and self.notice.active():
+            time.sleep(NOTICE_EVERY)
+        while not self._stopping and not all(os.path.exists(p) for p in RELOAD_PATHS):
+            time.sleep(NOTICE_EVERY)
+        time.sleep(1.0)             # let the card settle
 
     def _wait_for_reload(self, every=0.5):
         """Wait, without opening the card, until the driver has gone away and

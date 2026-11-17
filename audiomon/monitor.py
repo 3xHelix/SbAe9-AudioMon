@@ -438,6 +438,10 @@ class AE9View(QWidget):
         """Log the watched controls (once, then each change) and the playback
         stream's format whenever it opens or changes."""
         for name, value in self.controls.poll():
+            if name == driverstate.RELOAD:
+                self.log("ae9-reload: card released (reload notice)" if value == "released"
+                         else "ae9-reload done: card reopened")
+                continue
             if name == driverstate.HEALTH:
                 self._health_changed(driverstate.parse_health(value))
                 continue

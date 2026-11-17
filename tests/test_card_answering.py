@@ -67,7 +67,9 @@ class CardAnswering(unittest.TestCase):
             self.cgets.append(numid)
             return next(values)
 
+        self.notice = os.path.join(self.tmp, "ae9-reload")
         for target, attr, new in ((driverstate, "RELOAD_PATHS", self.paths),
+                                  (driverstate, "RELOAD_NOTICE", self.notice),
                                   (driverstate.subprocess, "Popen",
                                    mock.Mock(side_effect=lambda *a, **k: self.procs.pop(0))),
                                   (ControlWatcher, "_cget", cget),
@@ -94,6 +96,57 @@ class CardAnswering(unittest.TestCase):
         os.mkdir(self.paths[1])                         # ...and modprobe brings a new one
         self.assertTrue(wait_for(lambda: self.popen.call_count == 2))
         self.assertFalse(w.released)
+
+
+    def test_lets_go_while_ae9_reload_runs(self):
+        self.procs[0] = FakeProc([], block=threading.Event())     # a healthy card: no events
+        first = self.procs[0]
+        w = ControlWatcher()
+        self.addCleanup(w.stop)
+        self.assertTrue(wait_for(lambda: self.popen.call_count == 1))
+        with open(self.notice, "w") as f:                          # ae9-reload starts
+            f.write(f"{os.getpid()}\n")
+        self.assertTrue(wait_for(lambda: first.terminated, 2.0))   # within 0.5 s or so
+        self.assertIn(("ae9-reload", "released"), w.poll())
+        os.rmdir(self.paths[1])                                    # unload...
+        os.mkdir(self.paths[1])                                    # ...and load
+        time.sleep(1.0)
+        self.assertEqual(self.popen.call_count, 1)                 # not while the notice is there
+        os.remove(self.notice)                                     # ae9-reload is done
+        self.assertTrue(wait_for(lambda: self.popen.call_count == 2))
+        self.assertIn(("ae9-reload", "reopened"), w.poll())
+        self.assertFalse(w.released)
+
+
+class Notice(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.path = os.path.join(self.tmp, "ae9-reload")
+        self.n = driverstate.ReloadNotice(self.path)
+
+    def write(self, text):
+        with open(self.path, "w") as f:
+            f.write(text)
+
+    def test_missing(self):
+        self.assertFalse(self.n.active())
+
+    def test_live_and_dead_pid(self):
+        self.write(f"{os.getpid()}\n")
+        self.assertTrue(self.n.active())
+        self.write("999999999\n")              # a killed reload left it behind
+        self.assertFalse(self.n.active())
+
+    def test_empty_counts_for_a_while(self):
+        self.write("")
+        self.assertTrue(self.n.active(now=100.0))
+        self.assertTrue(self.n.active(now=219.0))
+        self.assertFalse(self.n.active(now=221.0))
+        os.remove(self.path)
+        self.assertFalse(self.n.active(now=222.0))
+        self.write("")                          # a new reload starts the clock again
+        self.assertTrue(self.n.active(now=300.0))
 
 
 if __name__ == "__main__":

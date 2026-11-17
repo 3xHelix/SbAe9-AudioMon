@@ -488,6 +488,12 @@ class Driver0122(MonitorTest):
         self.assertIn("free router slots down to 7", self.log_text())
         self.assertNotIn("lost replies 2 → 2", self.log_text())
 
+    def test_ae9_reload_logged(self):
+        support.CONTROLS.set("ae9-reload", "released")
+        self.assertTrue(wait_until(lambda: "ae9-reload: card released (reload notice)" in self.log_text()))
+        support.CONTROLS.set("ae9-reload", "reopened")
+        self.assertTrue(wait_until(lambda: "ae9-reload done: card reopened" in self.log_text()))
+
     def test_mic_monitor_holds_one_sided(self):
         support.CONTROLS.set("Mic Monitor Playback Switch", "on")
         self.pw.add_stream("Music Player", "song.flac", -12)

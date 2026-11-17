@@ -13,7 +13,7 @@ changes your audio: it only adds its own meter links and reads the driver's
 controls.
 
 This release pairs with
-[SbAe9-Drv v0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12).
+[SbAe9-Drv v0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13).
 
 ---
 
@@ -26,7 +26,8 @@ This release pairs with
 - **Debug log** timestamped to the second, to line up with `journalctl -k`,
   with every driver setting change and the stream format.
 - **Driver health** line and a notice when the card stops answering
-  (driver 0.12.9+), letting go of the card so it can be reloaded.
+  (driver 0.12.9+), letting go of the card so it can be reloaded, and while
+  `ae9-reload` runs (driver 0.12.13+).
 - **Lets the card idle**: meters never keep the AE-9 awake by default.
 - **Manual Meters**: two 2 to 8 channel meters you wire up by hand.
 - The same four palettes, **Glass** look and UI scaling as Sound Blaster
@@ -297,7 +298,8 @@ Monitor and Event Log pages. Times are local, to the second, to line up with
 - the playback stream's format, rate and buffer when it opens or changes
   (from `/proc/asound/AE9/pcm0p/sub0/hw_params`);
 - SILENT, ONE-SIDED and GATED start and end, and where the WAV was saved;
-- Driver Health changes, and the card stopping and starting to answer.
+- Driver Health changes, the card stopping and starting to answer, and
+  `ae9-reload` releasing and reopening the card.
 
 SILENT, ONE-SIDED and GATED lines and card (re)appearances include the
 driver version and srcversion from `/sys/module/snd_hda_codec_creative_ae9/`.
@@ -404,6 +406,17 @@ AudioMon then only watches `/sys/module/snd_hda_codec_creative_ae9` and
 away and come back. Older drivers don't have the control, so the card always
 counts as answering.
 
+### During `ae9-reload`
+
+([driver 0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13)+)
+`ae9-reload` leaves a notice (`$XDG_RUNTIME_DIR/ae9-reload`, holding its PID)
+while it reloads the driver. AudioMon checks for it every quarter second and
+lets go of the card while that reload runs, the same way as when the card
+stops answering, so a reload of a working card isn't blocked with AudioMon
+open. Once the notice is gone (or its PID has exited), it waits for the
+driver and the card to be back and follows the controls again. The debug log
+records both steps. Older drivers don't write the notice.
+
 ### Reporting a fault
 
 Attach the debug log, any saved WAVs, and the output of
@@ -436,6 +449,7 @@ everything, use the latest
 | "Driver state" in `ae9-full-dump` | [0.12.6](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.6) |
 | Card stopped answering notice, `ae9-reload` | [0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9) |
 | Driver health line | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
+| Letting go of the card while `ae9-reload` runs | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
 
 </details>
 

@@ -5,6 +5,22 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.9 (2026-11-17)
+
+For driver 0.12.13.
+
+### Added
+
+- AudioMon lets go of the card while `ae9-reload` runs, so reloading a
+  working card no longer waits for AudioMon to be closed. Driver 0.12.13's
+  `ae9-reload` writes its PID to `$XDG_RUNTIME_DIR/ae9-reload` while it
+  reloads; AudioMon checks for it every 0.25 s, stops its `amixer` watcher and
+  health reads, and opens the card again once the notice is gone (or its PID
+  has exited) and the card is back. A stale notice from a killed reload is
+  ignored, and an empty or unreadable one counts for at most 120 s. The debug
+  log records "card released" and "card reopened". Older drivers don't write
+  the notice: nothing changes there.
+
 ## 0.4.8 (2026-11-16)
 
 For [driver 0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12) (the Driver
