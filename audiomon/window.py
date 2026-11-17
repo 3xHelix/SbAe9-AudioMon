@@ -449,6 +449,10 @@ class MainWindow(QWidget):
         self._refresh_status()
         page = cfg.get("page", 0)
         self.go(page if isinstance(page, int) and 0 <= page < self.stack.count() else 0)
+        # Open at the meters' natural size; from then on the window keeps
+        # whatever size it's given (the meter rows scroll instead).
+        self.layout().activate()
+        self.resize(self.sizeHint().expandedTo(QSize(1320, 860)))
 
         self.last_tick = time.monotonic()
         self.timer = QTimer(self)
@@ -635,17 +639,6 @@ class MainWindow(QWidget):
         self.gated_lbl.setVisible(self._gated)
         if not self.dropouts_lbl.text():
             self.dropouts_lbl.setText("Dropouts: 0")
-
-    def fit_window(self):
-        """Shrink the window back to its natural width (e.g. after fewer channels)."""
-        def shrink():
-            if self.isMaximized():
-                return
-            if self.layout():
-                self.layout().activate()
-            # Asking for width 1 gets clamped to the minimum the layout allows.
-            self.resize(1, self.height())
-        QTimer.singleShot(0, shrink)
 
     def _tick(self):
         now = time.monotonic()

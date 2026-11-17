@@ -214,6 +214,9 @@ stop the AE-9 monitoring, untick **Auto-wire AE-9** in Settings.
   frosted; the app runs through XWayland for that, since KDE only blurs X11
   windows.
 
+The window keeps the size you give it: when meters come and go (a 5.1
+switch, a driver reload, app streams), the rows scroll instead of resizing it.
+
 Changing the palette, UI scale or Glass reopens the window, so the meters
 restart for about a second, and the debug log says so.
 
@@ -397,8 +400,8 @@ card isn't answering.
 ([driver 0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9)+)
 When the driver's read-only "Card Answering" control goes off, AudioMon lets
 go of the card: its `amixer` watcher exits and nothing opens the card again,
-so `modprobe -r` isn't blocked by AudioMon. A red notice above the meters
-says so: reload the driver with `ae9-reload` (named when it's installed) or
+so `modprobe -r` isn't blocked by AudioMon. A red notice beside the App
+streams title says so: reload the driver with `ae9-reload` (named when it's installed) or
 power the PC off (without `ae9-reload`, SbAe9-SBC shows the steps).
 
 AudioMon then only watches `/sys/module/snd_hda_codec_creative_ae9` and

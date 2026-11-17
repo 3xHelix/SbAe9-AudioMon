@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """The AE-9 monitor (auto-wiring, SILENT detection) and the manual meters."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 import os
@@ -26,21 +26,55 @@ SETTLE = 3.0            # after a stream starts or a driver setting changes: no 
                         # moves into the DSP), since the driver restarts or reroutes it
 
 
+class MeterRowScroll(QScrollArea):
+    """A frameless scroll area around a row of meters. Sideways, it scrolls
+    when the row needs more room (more channels), instead of making the
+    window wider, so the window keeps the size the user gave it. In height it
+    always shows the meters whole (room for the scroll bar included, so the
+    bar coming and going doesn't change the window either)."""
+
+    def __init__(self, widget):
+        super().__init__()
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setWidget(widget)
+
+    def _bar(self):
+        return self.horizontalScrollBar().sizeHint().height()
+
+    def sizeHint(self):
+        hint = self.widget().sizeHint()
+        return QSize(hint.width(), hint.height() + self._bar())
+
+    def minimumSizeHint(self):
+        # the meters' full height (scale and stats rows), never squeezed
+        return QSize(0, self.widget().sizeHint().height() + self._bar())
+
+
+def fixed_size_scroll(widget):
+    return MeterRowScroll(widget)
+
+
 class ManualView(QWidget):
     """The original two meters with unlinked ports, wired by hand."""
 
     def __init__(self, win):
         super().__init__()
-        layout = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        row = QWidget()
+        layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
+        outer.addWidget(fixed_size_scroll(row))
         self.panels = []
         for m in win.cfg["meters"]:
             def on_channels(ch, m=m):
                 m["channels"] = ch
                 save_config(win.cfg)
-            p = MeterPanel(m["label"], m["name"], m["channels"],
-                           on_channels=on_channels, fit=win.fit_window)
+            p = MeterPanel(m["label"], m["name"], m["channels"], on_channels=on_channels)
             self.panels.append(p)
             layout.addWidget(p)
 
@@ -241,24 +275,32 @@ class AE9View(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        self.card_notice = label("", "cardNotice", wrap=True)
-        self.card_notice.hide()
-        layout.addWidget(self.card_notice)
 
-        row = QHBoxLayout()
+        row_holder = QWidget()
+        row = QHBoxLayout(row_holder)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(14)
         self.fixed = {}
         for key, title, node_name, _gated in FIXED_TAPS:
             passive = self.let_idle and key in ("monitor", "optical_out")
-            p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive, fit=win.fit_window,
+            p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive,
                            node_label=title, keep=onesided.KEEP if key in ("monitor", "wuh") else 0,
                            tooltip=f"{title}\n{DETAILS[key]}\nmeter node: {node_name}")
             p.note = "searching…"
             self.fixed[key] = p
             row.addWidget(p)
-        layout.addLayout(row, 5)
+        layout.addWidget(fixed_size_scroll(row_holder), 0)      # its full height, no more needed
 
-        layout.addWidget(label("App streams → AE-9", "sectionTitle"))
+        streams_row = QHBoxLayout()
+        streams_row.addWidget(label("App streams → AE-9", "sectionTitle"))
+        # the card-stopped notice: one line beside the title (full text on
+        # hover), so showing it never changes the window's size
+        self.card_notice = label("", "cardNotice")
+        self.card_notice.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.card_notice.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.card_notice.hide()
+        streams_row.addWidget(self.card_notice, 1)
+        layout.addLayout(streams_row)
         self.streams = {}           # stream node id -> (panel, started_at, title)
         self.streams_box = QHBoxLayout()
         self.streams_box.setContentsMargins(0, 0, 0, 0)
@@ -271,10 +313,10 @@ class AE9View(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setWidget(holder)
         self.streams_scroll = scroll
-        layout.addWidget(scroll, 4)
+        layout.addWidget(scroll, 1)          # the spare height goes to the app streams
         self._size_streams()
 
         events_row = QHBoxLayout()
@@ -516,6 +558,7 @@ class AE9View(QWidget):
         if not answering:
             text = stopped_notice()
             self.card_notice.setText(text)
+            self.card_notice.setToolTip(text)
             self.log(text.replace("The AE-9 stopped answering.", "AE-9 stopped answering:", 1))
         elif not first:
             self.log("AE-9 answering again (driver reloaded): following its controls again")
@@ -667,8 +710,8 @@ class AE9View(QWidget):
 
     def _size_streams(self):
         """Give the app-stream row room only while there are streams."""
-        if self.streams:
-            self.streams_scroll.setMinimumHeight(310)
+        if self.streams:            # takes its share of the height; scrolls if short
+            self.streams_scroll.setMinimumHeight(28)
             self.streams_scroll.setMaximumHeight(16777215)
         else:
             self.streams_scroll.setMinimumHeight(28)

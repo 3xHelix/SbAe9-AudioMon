@@ -504,6 +504,38 @@ class Driver0122(MonitorTest):
         self.assertEqual(self.view.onesided.count, 0)
 
 
+class KeepsItsSize(MonitorTest):
+    """The window keeps the size it was given: more channels, app streams
+    coming and going (a card reload) or a notice never resize it."""
+
+    def test_window_size_holds(self):
+        self.win.resize(900, 640)
+        process(300)
+        size = self.win.size()
+        self.assertEqual(size.width(), 900)          # six meters no longer force a wide window
+        for p in self.view.fixed.values():          # speakers 2.0 -> 5.1 / 7.1
+            p.start(8)
+        ids = [self.pw.add_stream(f"Player {i}", "song.flac", -12) for i in range(4)]
+        support.CONTROLS.set("Card Answering", "off")
+        self.view.fixed["monitor"].set_format("IEC958 AC3 passthrough · 48 kHz · 24-bit · "
+                                              "→ RCA out (headphone mix) · Voice Clarity (8 kHz)")
+        process(800)
+        self.assertEqual(self.win.size(), size)
+        for nid in ids:                              # the card reloads: streams go...
+            self.pw.stop_stream(nid)
+        for p in self.view.fixed.values():
+            p.start(2)
+        support.CONTROLS.set("Card Answering", "on")
+        process(800)
+        self.assertEqual(self.win.size(), size)      # ...and the window doesn't shrink
+        self.win.go(self.win.stack.indexOf(self.win.manual))    # the Manual Meters page
+        process(300)
+        for p in self.win.manual.view.panels:
+            p.start(8)
+        process(300)
+        self.assertEqual(self.win.size(), size)
+
+
 class OpticalWithoutLight(MonitorTest):
     let_idle = False
 

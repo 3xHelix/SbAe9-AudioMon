@@ -270,6 +270,8 @@ class MeterPanel(QFrame):
         layout.addWidget(self.meter, 1)
         # the stream's format, under the Peak/RMS/Avg/Max rows
         self.fmt_lbl = label("", "muted")
+        # one line, cut off rather than widening the card (the full text on hover)
+        self.fmt_lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.fmt_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.fmt_lbl)
 
@@ -305,6 +307,7 @@ class MeterPanel(QFrame):
         if text != self._format_text:
             self._format_text = text
             self.fmt_lbl.setText(text)
+            self.fmt_lbl.setToolTip(text)
 
     def _on_combo(self, idx):
         ch = CHANNEL_CHOICES[idx]

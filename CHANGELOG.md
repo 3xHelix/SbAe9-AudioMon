@@ -21,6 +21,19 @@ For driver 0.12.13.
   log records "card released" and "card reopened". Older drivers don't write
   the notice: nothing changes there.
 
+### Fixed
+
+- The window keeps the size you give it. Switching speakers (2.0 to 5.1),
+  a card reload, app streams coming and going, or a notice no longer resize
+  it: the meter rows scroll sideways when they need more room, the app-stream
+  area scrolls when it's short, and long format lines are cut off (the full
+  text on hover). The window opens at the meters' natural size.
+
+### Changed
+
+- The "card stopped answering" notice sits on one line beside the App
+  streams title (the full text on hover).
+
 ## 0.4.8 (2026-11-16)
 
 For [driver 0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12) (the Driver
