@@ -198,6 +198,17 @@ and srcversion from `/sys/module/snd_hda_codec_creative_ae9/`. A SILENT,
 ONE-SIDED or GATED line also names the driver change that came in the 30 s before it
 (`| after: PCM Bit Depth 32-bit → 24-bit, 0.8 s before`).
 
+**Driver health** ([driver 0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11)+). A line beside "Recent events"
+shows the driver's read-only "Driver Health" counters: `Driver health: OK ·
+late replies 1380 (max 5 µs) · free router slots 88`. Five counters should
+stay 0 (verb timeouts, lost replies, other-codec replies, bad write pointer,
+BDLs kept): when one rises, the line names it in red and the debug log records
+the change with the driver version. Late replies grow with traffic and are
+information only. The free router slots are a trend; under 10 is flagged, and
+at 0 DSP mode goes silent. The tooltip has all eight. Older drivers show
+"n/a". AudioMon reads the control every few seconds (the driver caches it, so
+the card isn't touched) and stops while the card isn't answering.
+
 **Card stopped answering** ([driver 0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9)+). When the driver's read-only
 "Card Answering" control goes off, AudioMon lets go of the card: its `amixer`
 watcher exits and nothing opens the card again, so `modprobe -r` isn't

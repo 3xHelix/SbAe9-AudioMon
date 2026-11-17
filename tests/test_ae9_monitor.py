@@ -473,6 +473,21 @@ class Driver0122(MonitorTest):
         with mock.patch.object(monitor.shutil, "which", lambda name: None):
             self.assertIn("SbAe9-SBC shows the steps", monitor.stopped_notice())
 
+    def test_driver_health(self):
+        lbl = self.view.health_lbl
+        self.assertTrue(wait_until(lambda: lbl.text().startswith("Driver health: OK")))
+        self.assertIn("late replies 96 (max 5 µs) · free router slots 86", lbl.text())
+        self.assertIn("Driver health: verb timeouts 0, lost replies 0", self.log_text())
+        self.assertIn("RIRB replies that never landed: 0", lbl.toolTip())
+        support.CONTROLS.set("Driver Health", "0, 2, 0, 0, 0, 120, 6, 86")
+        self.assertTrue(wait_until(lambda: lbl.text().startswith("Driver health: 2 lost replies")))
+        self.assertEqual(lbl.objectName(), "healthProblem")
+        self.assertIn("Driver health: lost replies 0 → 2 (should stay 0)", self.log_text())
+        support.CONTROLS.set("Driver Health", "0, 2, 0, 0, 0, 130, 6, 7")
+        self.assertTrue(wait_until(lambda: "7 free router slots (low)" in lbl.text()))
+        self.assertIn("free router slots down to 7", self.log_text())
+        self.assertNotIn("lost replies 2 → 2", self.log_text())
+
     def test_mic_monitor_holds_one_sided(self):
         support.CONTROLS.set("Mic Monitor Playback Switch", "on")
         self.pw.add_stream("Music Player", "song.flac", -12)

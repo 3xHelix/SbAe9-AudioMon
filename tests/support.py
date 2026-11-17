@@ -40,7 +40,7 @@ DRIVER_STATE = {"Headphone Profile": "Off", "PCM Bit Depth": "24-bit", "Direct M
                 "Mic EQ Capture Enum": "Off", "Voice Morphing Capture Enum": "Neutral",
                 "Mic Monitor Playback Switch": "off", "Mic Monitor Used Since Power-up": "off",
                 "Headphone Virtualization Switch": "on", "Line Out Virtualization Switch": "off",
-                "Card Answering": "on"}
+                "Card Answering": "on", "Driver Health": "0, 0, 0, 0, 0, 96, 5, 86"}
 
 
 class FakeControls:

@@ -36,6 +36,24 @@ WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "Headphone Virtualization Switch", "Line Out Virtualization Switch",
          "Card Answering")      # driver 0.12.9+: off once the card stops answering
 CARD_ANSWERING = "Card Answering"
+
+# driver 0.12.11+: one read-only control with 8 counters. Followed with the
+# others but logged on its own (see monitor). Its events cover the warning
+# counters and the free slots; the two info counters are polled.
+HEALTH = "Driver Health"
+HEALTH_POLL = 5.0       # seconds between reads for the info counters
+HEALTH_FIELDS = (       # (short text, tooltip text, a warning when > 0)
+    ("verb timeouts", "verb timeouts: commands the card didn't answer", True),
+    ("lost replies", "RIRB replies that never landed", True),
+    ("other-codec replies", "RIRB answers from another codec", True),
+    ("bad write pointer", "unreadable RIRB write pointer (bus glitch or a failing card)", True),
+    ("BDLs kept", "BDLs kept: a stream's DMA engine that wouldn't stop", True),
+    ("late replies", "RIRB replies that landed late (grows with traffic, not an alarm)", False),
+    ("longest wait", "longest late wait in µs (normally 8 or less)", False),
+    ("free router slots", "free router slots for DSP-mode routes (a trend; low below 10, "
+                          "-1 until first measured)", False),
+)
+SLOTS_LOW = 10
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
          "Speaker Level Front L Volume": "Front L level", "Speaker Level Front R Volume": "Front R level",
@@ -69,6 +87,36 @@ _INT = re.compile(r"type=INTEGER,.*?min=(-?\d+)")
 _DB = re.compile(r"dBscale-min=(-?[\d.]+)dB,step=([\d.]+)dB")
 _NUM = re.compile(r"-?\d+(?:\.\d+)?")
 _ENV = dict(os.environ, LC_ALL="C")
+
+
+def parse_health(value):
+    """The 8 Driver Health counters from its value text, or None."""
+    try:
+        vals = [int(v) for v in (value or "").split(",")]
+    except ValueError:
+        return None
+    return vals if len(vals) == len(HEALTH_FIELDS) else None
+
+
+def health_problems(vals):
+    """[(short text, count)] for the counters that should stay 0 and don't,
+    plus the free router slots when they run low."""
+    out = [(f[0], v) for f, v in zip(HEALTH_FIELDS, vals) if f[2] and v > 0]
+    if 0 <= vals[7] < SLOTS_LOW:
+        out.append(("free router slots", vals[7]))
+    return out
+
+
+def health_text(vals):
+    """(the health line, a problem?) for the counters, or n/a without them."""
+    if vals is None:
+        return "Driver health: n/a", False
+    problems = health_problems(vals)
+    head = (" · ".join(f"{n} {t}" if t != "free router slots" else f"{n} free router slots (low)"
+                       for t, n in problems) if problems else "OK")
+    slots = "not measured yet" if vals[7] < 0 else str(vals[7])
+    return (f"Driver health: {head} · late replies {vals[5]} (max {vals[6]} µs) · "
+            f"free router slots {slots}"), bool(problems)
 
 
 def short(name):
@@ -205,13 +253,29 @@ class ControlWatcher:
 
     def __init__(self, card=ae9.CARD_ID, watch=WATCH):
         self.card = card
-        self.watch = set(watch)
+        self.watch = set(watch) | {HEALTH}
         self.error = None
+        self._health = None         # (numid, last value) once the control is seen
         self.released = False       # let go of the card: it stopped answering
         self._q = queue.Queue()
         self._stopping = False
         self._proc = None
         threading.Thread(target=self._run, daemon=True).start()
+        threading.Thread(target=self._poll_health, daemon=True).start()
+
+    def _poll_health(self):
+        """Read Driver Health every few seconds: its late-reply counters change
+        all the time, so the driver sends no events for them. The read is
+        cached in the driver (no card I/O), and skipped once the card is let go."""
+        while not self._stopping:
+            time.sleep(HEALTH_POLL)
+            h, proc = self._health, self._proc
+            if not h or self.released or not proc or proc.poll() is not None:
+                continue
+            value = self._cget(h[0])
+            if value is not None and value != h[1] and not self.released:
+                self._health = (h[0], value)
+                self._q.put((HEALTH, value))
 
     def poll(self):
         out = []
@@ -249,8 +313,11 @@ class ControlWatcher:
                     self._q.put((ev[2], value))
                     proc.terminate()        # let go of the card's control device
                     break
+                if ev[2] == HEALTH:
+                    self._health = (ev[1], value)
                 self._q.put((ev[2], value))
             proc.wait()
+            self._health = None
             if self.released:
                 self._wait_for_reload()
                 self.released = False

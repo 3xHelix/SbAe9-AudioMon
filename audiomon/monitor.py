@@ -2,7 +2,7 @@
 """The AE-9 monitor (auto-wiring, SILENT detection) and the manual meters."""
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 import os
 import shutil
@@ -277,7 +277,16 @@ class AE9View(QWidget):
         layout.addWidget(scroll, 4)
         self._size_streams()
 
-        layout.addWidget(label("Recent events", "sectionTitle"))
+        events_row = QHBoxLayout()
+        events_row.addWidget(label("Recent events", "sectionTitle"))
+        self.health_lbl = label("", "hint")
+        self.health_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        # a long line (several problems) is cut off rather than widening the window
+        self.health_lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        events_row.addWidget(self.health_lbl, 1)
+        layout.addLayout(events_row)
+        self.health = None          # the Driver Health counters, once seen
+        self._show_health()
         self.logview = log_view(80)
         self.logview.setMaximumHeight(120)
         layout.addWidget(self.logview)
@@ -429,6 +438,9 @@ class AE9View(QWidget):
         """Log the watched controls (once, then each change) and the playback
         stream's format whenever it opens or changes."""
         for name, value in self.controls.poll():
+            if name == driverstate.HEALTH:
+                self._health_changed(driverstate.parse_health(value))
+                continue
             old = self.driver_state.get(name)
             self.driver_state[name] = value
             if old is None:
@@ -462,6 +474,38 @@ class AE9View(QWidget):
                 else:
                     self.log(f"AE-9 stream: {fmt}")
                 self.stream_format = fmt
+
+    def _health_changed(self, vals):
+        """Log the Driver Health counters (driver 0.12.11+) at the start, then
+        each problem counter that rises and the free slots running low."""
+        if vals is None:
+            return
+        old, self.health = self.health, vals
+        if old is None:
+            self.log("Driver health: " + ", ".join(
+                f"{f[0]} {v}" for f, v in zip(driverstate.HEALTH_FIELDS, vals)))
+        else:
+            for f, a, b in zip(driverstate.HEALTH_FIELDS, old, vals):
+                if f[2] and b > a:
+                    self.log(f"Driver health: {f[0]} {a} → {b} (should stay 0) | {core.driver_info()}")
+            low = driverstate.SLOTS_LOW
+            if 0 <= vals[7] < low <= old[7] or (0 <= vals[7] < low and old[7] < 0):
+                self.log(f"Driver health: free router slots down to {vals[7]} "
+                         f"(DSP mode goes silent at 0)")
+        self._show_health()
+
+    def _show_health(self):
+        text, problem = driverstate.health_text(self.health)
+        self.health_lbl.setText(text)
+        self.health_lbl.setObjectName("healthProblem" if problem else "hint")
+        self.health_lbl.style().unpolish(self.health_lbl)
+        self.health_lbl.style().polish(self.health_lbl)
+        if self.health is None:
+            tip = "The driver's health counters (\"Driver Health\" control, driver 0.12.11+)."
+        else:
+            tip = "\n".join(f"{f[1]}: {v}" for f, v in zip(driverstate.HEALTH_FIELDS, self.health))
+            tip += "\n\nThe first five should stay 0. Read with amixer -c AE9, never written."
+        self.health_lbl.setToolTip(tip)
 
     def _card_answering(self, answering, first):
         """Show (or clear) the notice that the card stopped answering."""

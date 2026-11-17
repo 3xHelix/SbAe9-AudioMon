@@ -5,6 +5,25 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.8 (2026-11-16)
+
+For [driver 0.12.12](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.12) (the Driver
+Health control is in 0.12.11 and later).
+
+### Added
+
+- A "Driver health" line beside Recent events, from driver 0.12.11's
+  read-only "Driver Health" control: `OK`, or the counters that should stay 0
+  and didn't (verb timeouts, lost replies, other-codec replies, bad write
+  pointer, BDLs kept) in red, plus the late replies, longest wait and free
+  router slots (flagged under 10). The tooltip lists all eight. The debug log
+  records the counters at start, each problem counter that rises, and the free
+  slots running low. Older drivers show "n/a".
+
+### Removed
+
+- The GitHub workflow that announced releases on Discord.
+
 ## 0.4.7 (2026-11-14)
 
 For [driver 0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9).
