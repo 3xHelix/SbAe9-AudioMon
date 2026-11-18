@@ -7,6 +7,7 @@ Nothing here writes to the card or to PipeWire.
 
 import os
 import re
+import time
 
 DRIVER = "snd_hda_codec_creative_ae9"
 CARD_ID = "AE9"
@@ -139,3 +140,39 @@ def pcm_open_at(pcm="pcm0p", card_id=CARD_ID):
     """(rate, channels) a PCM is open at: pcm0p playback, pcm0c mic / line-in,
     pcm1c optical in, pcm2c What U Hear. None when it's closed."""
     return parse_hw_params(_read(f"/proc/asound/{card_id}/{pcm}/sub0/hw_params"))
+
+
+# --- ae9-reload's notice (driver 0.12.13+) ---------------------------------------
+# While ae9-reload reloads the driver it writes its own PID ($$, as the desktop
+# user) to /run/user/<uid>/ae9-reload, so every app holding the card lets go of
+# it, and removes it on any exit (trap EXIT; a kill -9 leaves a stale PID). Run
+# as plain root (no SUDO_USER), or with no /run/user/<uid>, it writes none: the
+# apps then let go only once the driver says the card stopped answering.
+RELOAD_NOTICE = "ae9-reload"
+RELOAD_NOTICE_MAX_S = 120     # an empty / unreadable notice counts this long (ae9-reload waits 90)
+
+
+def reload_notice_path():
+    """Where ae9-reload writes its notice: $XDG_RUNTIME_DIR/ae9-reload, or
+    /run/user/<uid>/ae9-reload."""
+    run = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    return os.path.join(run, RELOAD_NOTICE)
+
+
+def reload_notice_active(path=None, now=None):
+    """True while ae9-reload is reloading the driver: its notice is there and
+    the PID in it is alive (/proc/<pid>). A notice whose PID is gone is stale
+    and doesn't count; an empty or unreadable one counts for
+    RELOAD_NOTICE_MAX_S after it was written (by mtime), then is ignored.
+    Read-only, no state: poll it as often as you like."""
+    path = path or reload_notice_path()
+    try:
+        mtime = os.stat(path).st_mtime
+    except OSError:
+        return False
+    try:
+        with open(path) as f:
+            pid = int(f.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return (time.time() if now is None else now) - mtime < RELOAD_NOTICE_MAX_S
+    return pid > 0 and os.path.exists(f"/proc/{pid}")

@@ -9,6 +9,7 @@ In and (optionally) Rear RCA In added the way the driver's PipeWire config adds 
     pipewire   FakePipeWire (graph, ports, links, running / idle / suspended,
                levels, a run() dispatcher for PipeWire commands), FakeLinker
                (pw-link), make_fake_capture (pw-record meters)
+    (here)     write_reload_notice / dead_pid: ae9-reload's notice file
     mixer      FakeMixer, the card's ALSA controls (control apps only; it
                imports sbae9kit.mixer, so listen-only apps don't import it)
 
@@ -71,7 +72,31 @@ def block_subprocesses():
     subprocess.run = _no_subprocess
 
 
+def dead_pid():
+    """A PID that isn't running (for a stale notice)."""
+    pid = 4194304   # above the kernel's pid_max ceiling: never alive
+    while os.path.exists(f"/proc/{pid}"):
+        pid += 1
+    return pid
+
+
+def write_reload_notice(path, pid=None, age_s=0.0):
+    """A fake ae9-reload notice (driver 0.12.13) at `path`. `pid`: None for
+    this test process (a live reload), an int (dead_pid() for a stale
+    notice), or "" for an empty notice. `age_s` back-dates its mtime (an
+    empty notice stops counting after ae9.RELOAD_NOTICE_MAX_S). Remove the
+    file to end the reload. Returns `path`."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        f.write("" if pid == "" else f"{os.getpid() if pid is None else pid}\n")
+    if age_s:
+        t = os.stat(path).st_mtime - age_s
+        os.utime(path, (t, t))
+    return path
+
+
 from .pipewire import (  # noqa: E402,F401
     FakeLinker, FakePipeWire, make_fake_capture,
     MIC, MIC_DESC, OPTICAL, OPTICAL_OUT, REAR_RCA, SINK, WHAT_U_HEAR, WUH_OFFSET_DB,
 )
+

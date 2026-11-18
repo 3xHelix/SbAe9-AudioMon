@@ -17,7 +17,8 @@ For driver 0.12.13.
   reloads; AudioMon checks for it every 0.25 s, stops its `amixer` watcher and
   health reads, and opens the card again once the notice is gone (or its PID
   has exited) and the card is back. A stale notice from a killed reload is
-  ignored, and an empty or unreadable one counts for at most 120 s. The debug
+  ignored, and an empty or unreadable one counts for at most 120 s after it
+was written (the same rule as SbAe9-SBC, from SbAe9-Kit 0.3.9). The debug
   log records "card released" and "card reopened". Older drivers don't write
   the notice: nothing changes there.
 
@@ -33,6 +34,9 @@ For driver 0.12.13.
 
 - The "card stopped answering" notice sits on one line beside the App
   streams title (the full text on hover).
+- SbAe9-Kit 0.3.9: the ae9-reload notice check now comes from the shared kit
+  (`ae9.reload_notice_active`), and the tests use its
+  `testing.write_reload_notice` and `testing.dead_pid`.
 
 ## 0.4.8 (2026-11-16)
 

@@ -12,6 +12,7 @@ from unittest import mock
 
 import support  # noqa: F401  (loads the app's modules the way the other tests do)
 from audiomon import driverstate
+from sbae9kit import ae9, testing
 
 ControlWatcher = support.REAL.get("ControlWatcher", driverstate.ControlWatcher)
 
@@ -104,8 +105,7 @@ class CardAnswering(unittest.TestCase):
         w = ControlWatcher()
         self.addCleanup(w.stop)
         self.assertTrue(wait_for(lambda: self.popen.call_count == 1))
-        with open(self.notice, "w") as f:                          # ae9-reload starts
-            f.write(f"{os.getpid()}\n")
+        testing.write_reload_notice(self.notice)                   # ae9-reload starts
         self.assertTrue(wait_for(lambda: first.terminated, 2.0))   # within 0.5 s or so
         self.assertIn(("ae9-reload", "released"), w.poll())
         os.rmdir(self.paths[1])                                    # unload...
@@ -125,28 +125,27 @@ class Notice(unittest.TestCase):
         self.path = os.path.join(self.tmp, "ae9-reload")
         self.n = driverstate.ReloadNotice(self.path)
 
-    def write(self, text):
-        with open(self.path, "w") as f:
-            f.write(text)
-
     def test_missing(self):
         self.assertFalse(self.n.active())
 
     def test_live_and_dead_pid(self):
-        self.write(f"{os.getpid()}\n")
+        testing.write_reload_notice(self.path)
         self.assertTrue(self.n.active())
-        self.write("999999999\n")              # a killed reload left it behind
+        testing.write_reload_notice(self.path, pid=testing.dead_pid())   # a killed reload left it behind
         self.assertFalse(self.n.active())
 
     def test_empty_counts_for_a_while(self):
-        self.write("")
-        self.assertTrue(self.n.active(now=100.0))
-        self.assertTrue(self.n.active(now=219.0))
-        self.assertFalse(self.n.active(now=221.0))
+        testing.write_reload_notice(self.path, pid="")
+        self.assertTrue(self.n.active())
+        testing.write_reload_notice(self.path, pid="", age_s=ae9.RELOAD_NOTICE_MAX_S - 5)
+        self.assertTrue(self.n.active())
+        testing.write_reload_notice(self.path, pid="", age_s=ae9.RELOAD_NOTICE_MAX_S + 5)
+        self.assertFalse(self.n.active())                        # stale: ignored
         os.remove(self.path)
-        self.assertFalse(self.n.active(now=222.0))
-        self.write("")                          # a new reload starts the clock again
-        self.assertTrue(self.n.active(now=300.0))
+        self.assertFalse(self.n.active())
+
+    def test_default_path_is_the_kits(self):
+        self.assertEqual(driverstate.RELOAD_NOTICE, ae9.reload_notice_path())
 
 
 if __name__ == "__main__":

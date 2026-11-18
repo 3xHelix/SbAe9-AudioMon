@@ -57,11 +57,9 @@ SLOTS_LOW = 10
 
 # driver 0.12.13+: ae9-reload writes its PID here while it reloads the driver.
 # AudioMon lets go of the card for as long as that reload runs.
-RELOAD_NOTICE = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}",
-                             "ae9-reload")
+RELOAD_NOTICE = ae9.reload_notice_path()
 RELOAD = "ae9-reload"           # poll() name for "released" / "reopened"
 NOTICE_EVERY = 0.25             # seconds between checks (ae9-reload waits 5 s)
-NOTICE_MAX_UNREADABLE = 120.0   # an empty or unreadable notice counts this long
 SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround Switch": "Surround",
          "Bass Redirect Switch": "Bass Redirect",
          "Speaker Level Front L Volume": "Front L level", "Speaker Level Front R Volume": "Front R level",
@@ -128,30 +126,16 @@ def health_text(vals):
 
 
 class ReloadNotice:
-    """Whether an ae9-reload is running: its notice file exists and the PID in
-    it is alive. A stale file (the PID is gone) doesn't count; an empty or
-    unreadable one counts for at most NOTICE_MAX_UNREADABLE seconds."""
+    """Whether an ae9-reload is running, by the kit's shared check
+    (ae9.reload_notice_active): the notice exists and its PID is alive. A
+    stale one (the PID is gone) doesn't count; an empty or unreadable one
+    counts for ae9.RELOAD_NOTICE_MAX_S after it was written."""
 
     def __init__(self, path=None):
         self.path = path or RELOAD_NOTICE
-        self._unreadable_since = None
 
     def active(self, now=None):
-        now = time.monotonic() if now is None else now
-        try:
-            with open(self.path) as f:
-                text = f.read().strip()
-        except FileNotFoundError:
-            self._unreadable_since = None
-            return False
-        except OSError:
-            text = ""
-        if text.isdigit():
-            self._unreadable_since = None
-            return os.path.exists(f"/proc/{int(text)}")
-        if self._unreadable_since is None:
-            self._unreadable_since = now
-        return now - self._unreadable_since < NOTICE_MAX_UNREADABLE
+        return ae9.reload_notice_active(self.path, now)
 
 
 def short(name):
