@@ -5,9 +5,9 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## 0.4.9 (2026-11-17)
+## 0.4.9 (2026-11-18)
 
-For driver 0.12.13.
+For [driver 0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13).
 
 ### Added
 
@@ -18,7 +18,7 @@ For driver 0.12.13.
   health reads, and opens the card again once the notice is gone (or its PID
   has exited) and the card is back. A stale notice from a killed reload is
   ignored, and an empty or unreadable one counts for at most 120 s after it
-was written (the same rule as SbAe9-SBC, from SbAe9-Kit 0.3.9). The debug
+  was written (the same rule as SbAe9-SBC, from SbAe9-Kit 0.3.9). The debug
   log records "card released" and "card reopened". Older drivers don't write
   the notice: nothing changes there.
 
