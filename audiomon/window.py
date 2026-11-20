@@ -144,7 +144,9 @@ class SettingsPage(Page):
             "Let the AE-9 idle",
             "Meters never keep the card awake. The output, optical output and app meters are passive, and "
             "What U Hear / Mic / Aux / Optical In / Rear RCA In are only wired while the AE-9 sink is running. "
-            "Off: everything stays wired and the AE-9 never suspends.",
+            "Off: everything stays wired and the AE-9 never suspends. Keep it on if a player opens "
+            "hw:AE9,0 directly (native DSD, bit-perfect mpd): with it off PipeWire holds that device "
+            "and the player can't open it.",
             cfg["let_idle"], win.set_let_idle)
         self.capture_cb = check(
             "Always capture inputs",
@@ -403,7 +405,9 @@ class MainWindow(QWidget):
             return rb
 
         self.q_auto = quick("Auto-wire", "Auto-wire AE-9 (Settings → Monitoring)", self.set_auto)
-        self.q_idle = quick("Let idle", "Let the AE-9 idle (Settings → Monitoring)", self.set_let_idle)
+        self.q_idle = quick("Let idle", "Let the AE-9 idle (Settings → Monitoring). Keep it on if a player "
+                                     "opens hw:AE9,0 directly (native DSD, bit-perfect mpd).",
+                       self.set_let_idle)
         self.q_capture = quick("Always capture", "Always capture inputs (Settings → Monitoring)",
                                self.set_always_capture)
         bl.addWidget(self.quick)

@@ -5,6 +5,20 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.10 (2026-11-20)
+
+For [driver 0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15),
+which turns native DSD playback on by default. Nothing in AudioMon needed to
+change for it.
+
+### Changed
+
+- "Let idle" (Settings → Monitoring and the bottom bar) now says to keep it
+  on if a player opens `hw:AE9,0` directly, such as mpd or Cantata playing
+  native DSD or bit-perfect. With it off, PipeWire holds that device open
+  for the meters and the player can't open it. The README and `--keep-awake`
+  help say the same.
+
 ## 0.4.9 (2026-11-18)
 
 For [driver 0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13).

@@ -22,7 +22,7 @@ from audiomon import core, eventlog, monitor  # noqa: E402
 from audiomon import theme as T  # noqa: E402
 from audiomon.window import MainWindow  # noqa: E402
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLabel  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 
@@ -645,6 +645,12 @@ class WithoutRearRca(MonitorTest):
 
 
 class QuickToggles(MonitorTest):
+    def test_let_idle_names_direct_hw_players(self):
+        # driver 0.12.15 turns native DSD on: mpd opening hw:AE9,0 needs Let idle on
+        self.assertIn("hw:AE9,0 directly", self.win.q_idle.toolTip())
+        hints = [w.text() for w in self.win.settings.findChildren(QLabel)]
+        self.assertTrue(any("hw:AE9,0 directly" in h for h in hints))
+
     def test_bottom_bar_and_settings_stay_in_step(self):
         self.win.q_auto.click()
         self.assertFalse(self.win.settings.auto_cb.isChecked())

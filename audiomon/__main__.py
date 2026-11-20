@@ -25,7 +25,8 @@ def main():
     mode.add_argument("--manual", action="store_true", help="two meters you wire by hand")
     idle = ap.add_mutually_exclusive_group()
     idle.add_argument("--keep-awake", action="store_true",
-                      help="AE-9 mode: keep everything wired (the card never suspends)")
+                      help="AE-9 mode: keep everything wired (the card never suspends; a player "
+                           "that opens hw:AE9,0 directly, e.g. mpd for native DSD, can't)")
     idle.add_argument("--let-idle", action="store_true",
                       help="AE-9 mode: never keep the card awake (default)")
     ap.add_argument("--always-capture", action=argparse.BooleanOptionalAction, default=None,

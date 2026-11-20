@@ -13,7 +13,7 @@ changes your audio: it only adds its own meter links and reads the driver's
 controls.
 
 This release pairs with
-[SbAe9-Drv v0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13).
+[SbAe9-Drv v0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15).
 
 ---
 
@@ -267,6 +267,11 @@ suspending:
 
 Turn it off (or run with `--keep-awake`) to keep everything wired all the
 time. That keeps the AE-9 running permanently.
+
+**Keep it on if a player opens `hw:AE9,0` directly**, such as mpd or Cantata
+playing native DSD (on by default from driver 0.12.15) or bit-perfect. With
+Let idle off, PipeWire holds that device open for AudioMon's meters, so the
+player can't open it and won't play.
 
 **Always capture inputs** (off by default, `--always-capture`) is a
 comparison mode. The output and app meters stay passive, so the sink can
