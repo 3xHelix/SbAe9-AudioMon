@@ -13,7 +13,7 @@ changes your audio: it only adds its own meter links and reads the driver's
 controls.
 
 This release pairs with
-[SbAe9-Drv v0.12.16](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.16).
+[SbAe9-Drv v0.12.17](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.17).
 
 ---
 
@@ -396,7 +396,7 @@ replies, bad write pointer, BDLs kept): when one rises, the line names it in
 red and the debug log records the change with the driver version. Late
 replies grow with traffic and are information only. The free router slots
 are a trend; under 10 is flagged, and at 0 DSP mode goes silent. A ninth
-counter, late DAC I2C NACKs (planned for driver 0.12.17), should stay 0 too.
+counter, late DAC I2C NACKs (driver 0.12.17 and later), should stay 0 too.
 The tooltip has them all. Drivers before 0.12.11 show "n/a". AudioMon reads the control every few
 seconds (the driver caches it, so the card isn't touched) and stops while the
 card isn't answering.
@@ -459,6 +459,7 @@ everything, use the latest
 | Card stopped answering notice, `ae9-reload` | [0.12.9](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.9) |
 | Driver health line | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
 | Letting go of the card while `ae9-reload` runs | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
+| Late DAC I2C NACKs on the driver health line | [0.12.17](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.17) |
 
 </details>
 
