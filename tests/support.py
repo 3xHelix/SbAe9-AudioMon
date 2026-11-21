@@ -22,6 +22,7 @@ from sbae9kit import testing  # noqa: E402
 
 FAKE_DRIVER = "snd_hda_codec_creative_ae9 0.9.2 srcversion FAKE0000000000000000000"
 PW = None
+SOUND_ROOT = None   # the fake /sys/class/sound + /proc/asound card detection reads
 CONTROLS = None     # the fake ControlWatcher of the window made last
 HW_PARAMS = None    # the fake /proc/asound/AE9/pcm0p/sub0/hw_params
 _done = False
@@ -113,9 +114,16 @@ def _add_formats(pw):
     pw._bump()
 
 
+def sound_tree(*cards):
+    """Point the kit's card detection at fake cards (testing.AE9_CARD, ...;
+    none at all for no card). reset() puts the AE-9 back."""
+    return testing.fake_sound_tree(SOUND_ROOT, cards)
+
+
 def reset(**card):
     """A fresh fake card for the next test or scenario."""
     global PW
+    sound_tree(testing.AE9_CARD)        # card detection finds the AE-9, never the host's cards
     # driver 0.12.0: Rear RCA In and Optical Out too
     PW = testing.FakePipeWire(**dict(dict(rear_rca=True, optical_out=True), **card))
     _add_formats(PW)
@@ -134,8 +142,9 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     if _done:
         return
     _done = True
-    global HW_PARAMS, OPTICAL_HW_PARAMS, MIC_HW_PARAMS, MODULE_PARAMS
+    global HW_PARAMS, OPTICAL_HW_PARAMS, MIC_HW_PARAMS, MODULE_PARAMS, SOUND_ROOT
     tmp = testing.isolate("sbae9-audiomon", offscreen=offscreen)
+    SOUND_ROOT = os.path.join(tmp, "sound")
     testing.block_subprocesses()
     testing.TIME_SCALE = time_scale
 

@@ -49,9 +49,12 @@ class MonitorTest(unittest.TestCase):
     let_idle = True
     always_capture = False
     card = dict()
+    cards = None        # the fake cards detection sees (None: the AE-9)
 
     def setUp(self):
         self.pw = support.reset(**self.card)
+        if self.cards is not None:
+            support.sound_tree(*self.cards)
         self.cfg = core.load_config()
         self.cfg.update(mode="ae9", let_idle=self.let_idle, always_capture=self.always_capture,
                         page=0, frameless=False, glass=False, glass_opacity=70)
@@ -487,6 +490,17 @@ class Driver0122(MonitorTest):
         self.assertTrue(wait_until(lambda: "7 free router slots (low)" in lbl.text()))
         self.assertIn("free router slots down to 7", self.log_text())
         self.assertNotIn("lost replies 2 → 2", self.log_text())
+        self.assertIn("late DAC I2C NACKs: DAC writes the chip didn't acknowledge: n/a", lbl.toolTip())
+
+    def test_driver_health_ninth_counter(self):
+        # driver 0.12.17 (planned): a 9th value, late DAC I2C NACKs
+        lbl = self.view.health_lbl
+        support.CONTROLS.set("Driver Health", "0, 0, 0, 0, 0, 96, 5, 86, 0")
+        self.assertTrue(wait_until(lambda: "acknowledge: 0" in lbl.toolTip()))
+        self.assertTrue(lbl.text().startswith("Driver health: OK"))
+        support.CONTROLS.set("Driver Health", "0, 0, 0, 0, 0, 97, 5, 86, 3")
+        self.assertTrue(wait_until(lambda: lbl.text().startswith("Driver health: 3 late DAC I2C NACKs")))
+        self.assertIn("Driver health: late DAC I2C NACKs 0 → 3 (should stay 0)", self.log_text())
 
     def test_ae9_reload_logged(self):
         support.CONTROLS.set("ae9-reload", "released")

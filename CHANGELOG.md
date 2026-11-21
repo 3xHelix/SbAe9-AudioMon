@@ -5,6 +5,34 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.4.11 (2026-11-20)
+
+Groundwork for more than one card model (the AE-9 now, the AE-7 later). On
+an AE-9 nothing changes.
+
+### Changed
+
+- AudioMon finds the card with SbAe9-Kit 0.3.11's card detection, the same as
+  SbAe9-SBC: by ALSA card id, then card name, then PCI subsystem, and only
+  cards bound to the AE driver (never one on the in-tree snd_hda_intel). The
+  `/proc/asound` paths and `amixer -c` follow the detected card, looked up
+  again after a driver reload; "AE9" is still used when no card is found.
+- The window title, the logo, the meter names, "App streams →" and the
+  card-stopped notice show the detected model ("AE-9", later "AE-7").
+- Output and What U Hear are always metered. Optical Out, Mic / Aux, Optical
+  In and Rear RCA In are shown only when the driver offers their PCM (an
+  AE-7 has no optical in, rear RCA in or head unit). On a driver older than
+  0.12.0 the Optical Out meter is now left out instead of reading "not
+  found".
+- With two of our cards, AudioMon meters the first by card number.
+- Driver Health accepts more than 8 values. A 9th, late DAC I2C NACKs
+  (planned for driver 0.12.17), should stay 0: it's named in red and logged
+  when it rises, and the tooltip shows it ("n/a" on drivers with 8). Values
+  past the ones AudioMon knows are ignored, so a newer driver no longer turns
+  the line into "n/a".
+- Tests: card detection runs on fake `/sys/class/sound` trees (AE-9, AE-7,
+  an AE-7 on the in-tree driver, no card, two cards), never the host's cards.
+
 ## 0.4.10 (2026-11-20)
 
 For [driver 0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15),

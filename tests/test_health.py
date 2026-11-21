@@ -14,6 +14,16 @@ class Health(unittest.TestCase):
         self.assertIsNone(ds.parse_health("on"))
         self.assertIsNone(ds.parse_health(None))
 
+    def test_more_than_eight(self):
+        # driver 0.12.17 plans a 9th value (late DAC I2C NACKs); later ones are dropped
+        self.assertEqual(ds.parse_health("0, 0, 0, 0, 0, 96, 5, 86, 0"), [0, 0, 0, 0, 0, 96, 5, 86, 0])
+        self.assertEqual(ds.parse_health("0, 0, 0, 0, 0, 96, 5, 86, 0, 7"), [0, 0, 0, 0, 0, 96, 5, 86, 0])
+        text, problem = ds.health_text([0, 0, 0, 0, 0, 96, 5, 86, 2])
+        self.assertTrue(problem)
+        self.assertTrue(text.startswith("Driver health: 2 late DAC I2C NACKs · "))
+        self.assertEqual(ds.health_text([0, 0, 0, 0, 0, 96, 5, 86, 0])[0],
+                         "Driver health: OK · late replies 96 (max 5 µs) · free router slots 86")
+
     def test_text(self):
         self.assertEqual(ds.health_text(None), ("Driver health: n/a", False))
         text, problem = ds.health_text([0, 0, 0, 0, 0, 96, 5, -1])

@@ -104,6 +104,19 @@ def choose_channels(n):
     return CHANNEL_CHOICES[-1]
 
 
+def card_short():
+    """The detected card's short name for titles and labels: "AE-9", "AE-7"
+    (sbae9kit's detection; "AE-9" when no card is found, as before)."""
+    c = ae9.current()
+    return c.short if c else "AE-9"
+
+
+def card_name():
+    """The detected card's full name for sentences: "Sound Blaster AE-9"."""
+    c = ae9.current()
+    return c.name if c else "Sound Blaster AE-9"
+
+
 def driver_info():
     """The driver's version and srcversion, for the debug log (sbae9kit.ae9)."""
     if not os.path.isdir(ae9.MODULE):

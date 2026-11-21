@@ -9,7 +9,8 @@ In and (optionally) Rear RCA In added the way the driver's PipeWire config adds 
     pipewire   FakePipeWire (graph, ports, links, running / idle / suspended,
                levels, a run() dispatcher for PipeWire commands), FakeLinker
                (pw-link), make_fake_capture (pw-record meters)
-    (here)     write_reload_notice / dead_pid: ae9-reload's notice file
+    (here)     write_reload_notice / dead_pid: ae9-reload's notice file;
+               fake_sound_tree + AE9_CARD, AE7_CARD, ...: cards for detection
     mixer      FakeMixer, the card's ALSA controls (control apps only; it
                imports sbae9kit.mixer, so listen-only apps don't import it)
 
@@ -93,6 +94,66 @@ def write_reload_notice(path, pid=None, age_s=0.0):
         t = os.stat(path).st_mtime - age_s
         os.utime(path, (t, t))
     return path
+
+
+# Cards for fake_sound_tree(): (id, shortname, longname, subsystem vendor:device,
+# PCI driver, PCMs). Our driver binds the PCI device itself.
+AE9_CARD = ("AE9", "Sound Blaster AE-9", "Creative Labs Sound Blaster AE-9 at 0xfbf04000 irq 44",
+            (0x1102, 0x0071), "snd-hda-codec-creative-ae9", ("0p", "0c", "1c", "2c", "3c", "4p"))
+AE7_CARD = ("AE7", "Sound Blaster AE-7", "Creative Labs Sound Blaster AE-7 at 0xfc004000 irq 45",
+            (0x1102, 0x0081), "snd-hda-codec-creative-ae9", ("0p", "0c", "2c", "4p"))
+AE7_INTREE = ("Generic", "HD-Audio Generic", "HD-Audio Generic at 0xfc004000 irq 45",
+              (0x1102, 0x0081), "snd_hda_intel", ("0p", "0c"))   # an AE-7 on the in-tree driver
+AE5_CARD = ("AE5", "Sound Blaster AE-5", "Creative Labs Sound Blaster AE-5 at 0xfc104000 irq 46",
+            (0x1102, 0x0051), "snd-hda-codec-creative-ae9", ("0p", "0c"))   # reserved
+HDMI_CARD = ("HDMI", "HDA ATI HDMI", "HDA ATI HDMI at 0xfcb20000 irq 229",
+             (0x1002, 0xab28), "snd_hda_intel", ("3p",))
+USB_CARD = ("C920", "HD Pro Webcam C920", "HD Pro Webcam C920 at usb-0000:13:00.3-4.3, high speed",
+            None, "snd-usb-audio", ("0c",))
+
+
+def fake_sound_tree(root, cards=(AE9_CARD,), point=True):
+    """A fake /sys/class/sound and /proc/asound under `root`, one entry per card
+    (cards[i] is card i; None leaves a gap). `point`: aim sbae9kit.boards at it
+    (boards.ROOT) and forget the cached card. Returns `root`."""
+    from .. import boards
+    sys_sound = os.path.join(root, "sys", "class", "sound")
+    proc = os.path.join(root, "proc", "asound")
+    drivers = os.path.join(root, "sys", "bus", "pci", "drivers")
+    shutil.rmtree(sys_sound, ignore_errors=True)
+    shutil.rmtree(proc, ignore_errors=True)
+    os.makedirs(sys_sound)
+    os.makedirs(proc)
+    listing = []
+    for i, card in enumerate(cards):
+        if card is None:
+            continue
+        cid, short, longname, sub, driver, pcms = card
+        dev = os.path.join(root, "sys", "devices", f"card{i}-device")
+        os.makedirs(dev, exist_ok=True)
+        os.makedirs(os.path.join(drivers, driver), exist_ok=True)
+        link = os.path.join(dev, "driver")
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(os.path.join(drivers, driver), link)
+        if sub:
+            for name, val in zip(("subsystem_vendor", "subsystem_device"), sub):
+                with open(os.path.join(dev, name), "w") as f:
+                    f.write(f"0x{val:04x}\n")
+        cdir = os.path.join(sys_sound, f"card{i}")
+        os.makedirs(cdir)
+        os.symlink(dev, os.path.join(cdir, "device"))
+        with open(os.path.join(cdir, "id"), "w") as f:
+            f.write(cid + "\n")
+        for pcm in pcms:
+            os.makedirs(os.path.join(proc, cid, f"pcm{pcm}"), exist_ok=True)
+        listing.append(f"{i:2d} [{cid:<15}]: {driver} - {short}\n                      {longname}\n")
+    with open(os.path.join(proc, "cards"), "w") as f:
+        f.write("".join(listing) or "--- no soundcards ---\n")
+    if point:
+        boards.ROOT = root
+        boards.refresh()
+    return root
 
 
 from .pipewire import (  # noqa: E402,F401

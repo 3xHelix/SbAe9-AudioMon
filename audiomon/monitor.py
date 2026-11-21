@@ -7,6 +7,8 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QSizePolicy, QVB
 import os
 import shutil
 
+from sbae9kit import ae9
+
 from . import __version__, core, driverstate, gated, onesided, pipewire
 from .core import CHANNEL_MAPS, FLOOR_DB, choose_channels, fmt_db, save_config
 from .pipewire import Snapshot, find_ae9, is_ours
@@ -98,6 +100,28 @@ FIXED_TAPS = (
     ("optical", "AE-9 Optical In", "sbae9-audiomon.ae9.optical", True),
     ("rear_rca", "AE-9 Rear RCA In", "sbae9-audiomon.ae9.rear_rca", True),
 )
+
+# The card PCM behind each meter. Capability first: on a detected card, the
+# optional meters are shown only when the driver offers their PCM (an AE-7
+# has no optical in, rear RCA in or head unit). The output and What U Hear
+# meters are always there: dropout detection needs both.
+TAP_PCMS = {"optical_out": f"{ae9.OPTICAL_OUT[1]}p", "mic": "0c", "optical": "1c", "rear_rca": "3c"}
+
+
+def card_taps(card=None):
+    """FIXED_TAPS for `card` (an sbae9kit Card, or None when none is detected:
+    all of them, as before detection), titled with its model ("AE-7 Output")."""
+    out = []
+    for key, title, node_name, gated in FIXED_TAPS:
+        if card is not None:
+            if key in TAP_PCMS and not card.has_pcm(TAP_PCMS[key]):
+                continue
+            title = title.replace("AE-9", card.short, 1)
+            if key == "mic" and not card.has("head_unit"):
+                title = title.replace("Head Unit ", "", 1)
+        out.append((key, title, node_name, gated))
+    return tuple(out)
+
 
 # On screen each meter shows a short name (and its state); where it is, jack by
 # jack, is on hover.
@@ -226,9 +250,9 @@ def stopped_notice():
     """What to do once the card stopped answering: driver 0.12.9's ae9-reload
     when it's installed, else the steps SbAe9-SBC shows."""
     if shutil.which("ae9-reload"):
-        return ("The AE-9 stopped answering. AudioMon has let go of the card. Reload the "
+        return (f"The {core.card_short()} stopped answering. AudioMon has let go of the card. Reload the "
                 "driver with: ae9-reload (in a terminal), or power the PC off.")
-    return ("The AE-9 stopped answering. AudioMon has let go of the card so the driver can be "
+    return (f"The {core.card_short()} stopped answering. AudioMon has let go of the card so the driver can be "
             "reloaded: reload the driver or power the PC off (SbAe9-SBC shows the steps).")
 
 
@@ -281,7 +305,11 @@ class AE9View(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(14)
         self.fixed = {}
-        for key, title, node_name, _gated in FIXED_TAPS:
+        self.card = ae9.current()
+        self.taps = card_taps(self.card)
+        # with two of our cards, meter only the detected one's nodes
+        self.match_card = self.card if len(ae9.find_cards()) > 1 else None
+        for key, title, node_name, _gated in self.taps:
             passive = self.let_idle and key in ("monitor", "optical_out")
             p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive,
                            node_label=title, keep=onesided.KEEP if key in ("monitor", "wuh") else 0,
@@ -292,7 +320,7 @@ class AE9View(QWidget):
         layout.addWidget(fixed_size_scroll(row_holder), 0)      # its full height, no more needed
 
         streams_row = QHBoxLayout()
-        streams_row.addWidget(label("App streams → AE-9", "sectionTitle"))
+        streams_row.addWidget(label(f"App streams → {core.card_short()}", "sectionTitle"))
         # the card-stopped notice: one line beside the title (full text on
         # hover), so showing it never changes the window's size
         self.card_notice = label("", "cardNotice")
@@ -438,7 +466,7 @@ class AE9View(QWidget):
             bits = driverstate.number(self.driver_state.get("PCM Bit Depth"))
             return int(bits) if bits else None
         if key == "optical_out":    # what's on the wire: the open PCM, else PipeWire's format
-            fmt = driverstate.read_format(driverstate.OPTICAL_HW_PARAMS)
+            fmt = driverstate.read_format(driverstate.hw_params_path(f"pcm{ae9.OPTICAL_OUT[1]}p"))
             return driverstate.wire_bits(fmt or (node_format(node) or {}).get("format"))
         return driverstate.capture_bits()
 
@@ -452,7 +480,7 @@ class AE9View(QWidget):
             notes = []
             # the voice processor goes in at a recording's start (48 kHz only) and out at its stop
             if (driverstate.voice_clarity_wanted(ds)
-                    and driverstate.read_field(driverstate.MIC_HW_PARAMS, "rate") == "48000"):
+                    and driverstate.read_field(driverstate.hw_params_path("pcm0c"), "rate") == "48000"):
                 notes.append("Voice Clarity (8 kHz)")
                 # drivers 0.12.3-0.12.6: once the hardware mic monitor has been on, Voice
                 # Clarity records left ~20 dB low and right empty until a power-off
@@ -531,7 +559,8 @@ class AE9View(QWidget):
             self.log("Driver health: " + ", ".join(
                 f"{f[0]} {v}" for f, v in zip(driverstate.HEALTH_FIELDS, vals)))
         else:
-            for f, a, b in zip(driverstate.HEALTH_FIELDS, old, vals):
+            was = list(old) + [0] * (len(vals) - len(old))     # a counter new after a driver update
+            for f, a, b in zip(driverstate.HEALTH_FIELDS, was, vals):
                 if f[2] and b > a:
                     self.log(f"Driver health: {f[0]} {a} → {b} (should stay 0) | {core.driver_info()}")
             low = driverstate.SLOTS_LOW
@@ -549,8 +578,10 @@ class AE9View(QWidget):
         if self.health is None:
             tip = "The driver's health counters (\"Driver Health\" control, driver 0.12.11+)."
         else:
-            tip = "\n".join(f"{f[1]}: {v}" for f, v in zip(driverstate.HEALTH_FIELDS, self.health))
-            tip += "\n\nThe first five should stay 0. Read with amixer -c AE9, never written."
+            vals = list(self.health) + ["n/a"] * (len(driverstate.HEALTH_FIELDS) - len(self.health))
+            tip = "\n".join(f"{f[1]}: {v}" for f, v in zip(driverstate.HEALTH_FIELDS, vals))
+            tip += ("\n\nThe first five (and the DAC I2C NACKs) should stay 0. "
+                    f"Read with amixer -c {ae9.card_id()}, never written.")
         self.health_lbl.setToolTip(tip)
 
     def _card_answering(self, answering, first):
@@ -559,7 +590,8 @@ class AE9View(QWidget):
             text = stopped_notice()
             self.card_notice.setText(text)
             self.card_notice.setToolTip(text)
-            self.log(text.replace("The AE-9 stopped answering.", "AE-9 stopped answering:", 1))
+            short = core.card_short()
+            self.log(text.replace(f"The {short} stopped answering.", f"{short} stopped answering:", 1))
         elif not first:
             self.log("AE-9 answering again (driver reloaded): following its controls again")
         self.card_notice.setVisible(not answering)
@@ -605,11 +637,11 @@ class AE9View(QWidget):
     # -- graph reconciliation ------------------------------------------------
 
     def reconcile(self, snap, now):
-        found = find_ae9(snap)
+        found = find_ae9(snap, self.match_card)
         sink = found["monitor"]
 
         # Card nodes coming and going
-        for key, title, _, _ in FIXED_TAPS:
+        for key, title, _, _ in self.taps:
             node = found[key]
             cur = node.id if node else None
             if key not in self.present:
@@ -637,7 +669,7 @@ class AE9View(QWidget):
         sink_running = state == "running"
 
         # Fixed taps
-        for key, title, _, gated in FIXED_TAPS:
+        for key, title, _, gated in self.taps:
             panel = self.fixed[key]
             node = found[key]
             if node is None:

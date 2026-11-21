@@ -52,7 +52,11 @@ HEALTH_FIELDS = (       # (short text, tooltip text, a warning when > 0)
     ("longest wait", "longest late wait in µs (normally 8 or less)", False),
     ("free router slots", "free router slots for DSP-mode routes (a trend; low below 10, "
                           "-1 until first measured)", False),
+    # driver 0.12.17+ (planned): a 9th counter. Older drivers send 8 values,
+    # newer ones may send more: AudioMon reads the ones it knows.
+    ("late DAC I2C NACKs", "late DAC I2C NACKs: DAC writes the chip didn't acknowledge", True),
 )
+HEALTH_MIN = 8          # the counters every Driver Health control has (0.12.11+)
 SLOTS_LOW = 10
 
 # driver 0.12.13+: ae9-reload writes its PID here while it reloads the driver.
@@ -76,11 +80,31 @@ SHORT = {"Direct Mode Switch": "Direct Mode", "SBX Switch": "SBX", "FX Surround 
          "Line Out Virtualization Switch": "Line Out virtualization",
          "Card Answering": "Card answering"}
 
-HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0p/sub0/hw_params"
-OPTICAL_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm{ae9.OPTICAL_OUT[1]}p/sub0/hw_params"
-MIC_HW_PARAMS = f"/proc/asound/{ae9.CARD_ID}/pcm0c/sub0/hw_params"
+# The detected card's files (sbae9kit's detection: the AE-9 now, the AE-7
+# later), looked up each time so a card found later or after a reload counts.
+# Tests set these to fake files; None = the card's own.
+HW_PARAMS = None            # pcm0p: the main playback stream
+OPTICAL_HW_PARAMS = None    # pcm4p: the optical output (driver 0.12.0+)
+MIC_HW_PARAMS = None        # pcm0c: the mic / line-in
 # Polled (never opened) while the card isn't answering, to see the driver reload
-RELOAD_PATHS = (ae9.MODULE, f"/proc/asound/{ae9.CARD_ID}")
+RELOAD_PATHS = None
+
+
+def card_proc():
+    """/proc/asound/<the detected card's id> ("AE9" when none is found)."""
+    return f"/proc/asound/{ae9.card_id()}"
+
+
+def hw_params_path(pcm="pcm0p"):
+    """The hw_params file of one of the card's PCMs (or the test's fake)."""
+    fake = {"pcm0p": HW_PARAMS, f"pcm{ae9.OPTICAL_OUT[1]}p": OPTICAL_HW_PARAMS,
+            "pcm0c": MIC_HW_PARAMS}.get(pcm)
+    return fake or f"{card_proc()}/{pcm}/sub0/hw_params"
+
+
+def reload_paths():
+    """The driver's module and the card in /proc/asound: both there = loaded."""
+    return RELOAD_PATHS or (ae9.MODULE, card_proc())
 
 # Bits on the optical wire per sample format: S/PDIF carries 24 at most, so the
 # optical PCM's S32_LE is 24-bit there; passthrough (AC-3 / DTS) runs as S16_LE.
@@ -96,12 +120,14 @@ _ENV = dict(os.environ, LC_ALL="C")
 
 
 def parse_health(value):
-    """The 8 Driver Health counters from its value text, or None."""
+    """The Driver Health counters from its value text (the 8 of driver
+    0.12.11+, plus any later ones AudioMon knows; extra unknown ones are
+    dropped), or None."""
     try:
         vals = [int(v) for v in (value or "").split(",")]
     except ValueError:
         return None
-    return vals if len(vals) == len(HEALTH_FIELDS) else None
+    return vals[:len(HEALTH_FIELDS)] if len(vals) >= HEALTH_MIN else None
 
 
 def health_problems(vals):
@@ -242,7 +268,7 @@ def read_hw_params(path=None):
     """The open playback stream as 'S32_LE, 2 ch, 48000 Hz, period 1024,
     buffer 4096', or None while it's closed (or the card is gone)."""
     try:
-        with open(path or HW_PARAMS) as f:
+        with open(path or hw_params_path()) as f:
             text = f.read()
     except OSError:
         return None
@@ -273,8 +299,8 @@ class ControlWatcher:
     It also lets go while ae9-reload runs (driver 0.12.13+ writes a notice
     file for that), and opens the card again once the reload is over."""
 
-    def __init__(self, card=ae9.CARD_ID, watch=WATCH):
-        self.card = card
+    def __init__(self, card=None, watch=WATCH):
+        self._card = card           # None: the detected card, looked up each time
         self.watch = set(watch) | {HEALTH}
         self.error = None
         self._health = None         # (numid, last value) once the control is seen
@@ -287,6 +313,10 @@ class ControlWatcher:
         threading.Thread(target=self._run, daemon=True).start()
         threading.Thread(target=self._poll_health, daemon=True).start()
         threading.Thread(target=self._watch_notice, daemon=True).start()
+
+    @property
+    def card(self):
+        return self._card or ae9.card_id()
 
     def _watch_notice(self):
         """Let go of the card as soon as an ae9-reload starts."""
@@ -371,6 +401,8 @@ class ControlWatcher:
                 self._wait_released()
             elif not self._stopping:
                 time.sleep(3.0)     # no card (or it went away): try again
+                if ae9.current() is None:
+                    ae9.refresh()   # look for a card again
 
     def _wait_released(self):
         """Hold off the card until it's safe to open it again."""
@@ -379,6 +411,7 @@ class ControlWatcher:
         else:
             self._wait_for_reload()
         if not self._stopping:
+            ae9.refresh()           # the reloaded driver's card (its id can't change, its number can)
             if self._reload:
                 self._q.put((RELOAD, "reopened"))
             self._reload = False
@@ -389,7 +422,7 @@ class ControlWatcher:
         then for the module and the card to be there."""
         while not self._stopping and self.notice.active():
             time.sleep(NOTICE_EVERY)
-        while not self._stopping and not all(os.path.exists(p) for p in RELOAD_PATHS):
+        while not self._stopping and not all(os.path.exists(p) for p in reload_paths()):
             time.sleep(NOTICE_EVERY)
         time.sleep(1.0)             # let the card settle
 
@@ -398,7 +431,7 @@ class ControlWatcher:
         come back (its module and the card in /proc/asound)."""
         gone = False
         while not self._stopping:
-            present = all(os.path.exists(p) for p in RELOAD_PATHS)
+            present = all(os.path.exists(p) for p in reload_paths())
             if not present:
                 gone = True
             elif gone:

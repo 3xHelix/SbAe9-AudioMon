@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
-"""Read-only facts about the Sound Blaster AE-9: which PipeWire nodes are
-its, what the driver is and offers, and what its PCMs are open at.
+"""Read-only facts about the Sound Blaster AE-9 (and, through sbae9kit.boards,
+the AE-7): which cards and PipeWire nodes are ours, what the driver is and
+offers, and what its PCMs are open at.
+
+Card detection (from sbae9kit.boards, re-exported here): find_cards(),
+find_card(), current(), refresh(), card_id(), Card, Model, MODELS. Functions
+taking `card_id` default to the detected card (card_id(): "AE9" when none
+is found, so an AE-9 machine behaves as before).
 
 Nothing here writes to the card or to PipeWire.
 """
@@ -9,8 +15,13 @@ import os
 import re
 import time
 
-DRIVER = "snd_hda_codec_creative_ae9"
-CARD_ID = "AE9"
+from . import boards
+from .boards import (  # noqa: F401
+    Card, Model, MODELS, card_id, current, find_card, find_cards, identify, refresh,
+)
+
+DRIVER = "snd_hda_codec_creative_ae9"   # the module, for every board
+CARD_ID = "AE9"     # the AE-9's ALSA id; for the card that's here, use card_id()
 MODULE = f"/sys/module/{DRIVER}"
 MODULE_PARAMS = f"{MODULE}/parameters"
 
@@ -47,12 +58,49 @@ def _true(v):
     return v is True or str(v).lower() in ("true", "1")
 
 
-def is_ae9(props):
-    """A PipeWire node (or device) of the AE-9 itself, from its props."""
+def is_our_card(props, card=None):
+    """A PipeWire node (or device) of one of our cards (or of `card`, a Card),
+    from its props. A node from another driver never counts, even one named
+    after the board (an AE-7 on the in-tree snd_hda_intel)."""
     if is_app_node(props) or _true(props.get("node.virtual")):
         return False   # virtual nodes (echo-cancel, filter-chain, loopback) only borrow the name
-    blob = " ".join(str(props.get(k, "")) for k in AE9_KEYS).lower()
-    return "ae9" in blob or "ae-9" in blob
+    drv = str(props.get("alsa.driver_name", "")).replace("-", "_")
+    if drv and drv != DRIVER:
+        return False
+    if card is None:
+        return bool(drv) or boards.model_for_props(props) is not None
+    if str(props.get("alsa.id", "")).upper() == card.id.upper():
+        return True
+    path = str(props.get("api.alsa.path", "")).upper()
+    if path.startswith(f"HW:{card.id.upper()},"):
+        return True
+    if drv and path.startswith(f"HW:{card.index},"):   # PipeWire's usual numeric path
+        return True
+    if f".{card.model.node_prefix}_" in str(props.get("node.name", "")).lower():
+        return True
+    return bool(drv) and str(props.get("alsa.card", "")) == str(card.index)
+
+
+def is_ae9(props):
+    """Old name of is_our_card() (any of our cards)."""
+    return is_our_card(props)
+
+
+_OUR_HW = re.compile(r"^hw:(%s),(\d+)$" % "|".join(m.card_id for m in MODELS.values()), re.I)
+_NUM_HW = re.compile(r"^hw:\d+,(\d+)$")
+
+
+def _our_dev(props):
+    """The PCM device number of one of our cards' nodes: from hw:<our id>,N, or
+    from PipeWire's numeric hw:<index>,N when alsa.driver_name is ours. None."""
+    path = str(props.get("api.alsa.path", ""))
+    m = _OUR_HW.match(path)
+    if m:
+        return int(m.group(2))
+    m = _NUM_HW.match(path)
+    if m and str(props.get("alsa.driver_name", "")).replace("-", "_") == DRIVER:
+        return int(m.group(1))
+    return None
 
 
 def input_kind(props):
@@ -60,9 +108,9 @@ def input_kind(props):
     XLR / line-in, hw:AE9,0)."""
     name = str(props.get("node.name", "")).lower()
     desc = str(props.get("node.description", "")).lower()
-    path = str(props.get("api.alsa.path", ""))
+    dev_here = _our_dev(props)
     for key, (node_name, dev) in EXTRA_INPUTS.items():
-        if name == node_name or (path.startswith(f"hw:{CARD_ID},") and path.endswith(f",{dev}")):
+        if name == node_name or dev_here == dev:
             return key
     if "what_u_hear" in name or "what u hear" in desc:
         return "what_u_hear"
@@ -78,8 +126,7 @@ def output_kind(props):
     hw:AE9,4) or "main" (speakers / headphones, hw:AE9,0)."""
     name = str(props.get("node.name", "")).lower()
     desc = str(props.get("node.description", "")).lower()
-    path = str(props.get("api.alsa.path", ""))
-    if name == OPTICAL_OUT[0] or (path.startswith(f"hw:{CARD_ID},") and path.endswith(f",{OPTICAL_OUT[1]}")):
+    if name == OPTICAL_OUT[0] or _our_dev(props) == OPTICAL_OUT[1]:
         return "optical_out"
     if "optical" in name or "iec958" in name or "optical out" in desc:
         return "optical_out"
@@ -121,10 +168,10 @@ def driver_at_least(*want, version=None):
     return bool(have) and have >= want
 
 
-def has_capture_pcm(device, card_id=CARD_ID):
+def has_capture_pcm(device, card_id=None):
     """The driver offers capture device `device` (1 = optical in, 2 = What U Hear,
-    3 = head unit rear RCA)."""
-    return os.path.exists(f"/proc/asound/{card_id}/pcm{device}c")
+    3 = head unit rear RCA). `card_id`: the detected card by default."""
+    return os.path.exists(boards.proc_path(card_id or boards.card_id(), f"pcm{device}c"))
 
 
 def parse_hw_params(text):
@@ -136,10 +183,11 @@ def parse_hw_params(text):
     return int(rate.group(1)), int(ch.group(1)) if ch else 2
 
 
-def pcm_open_at(pcm="pcm0p", card_id=CARD_ID):
+def pcm_open_at(pcm="pcm0p", card_id=None):
     """(rate, channels) a PCM is open at: pcm0p playback, pcm0c mic / line-in,
-    pcm1c optical in, pcm2c What U Hear. None when it's closed."""
-    return parse_hw_params(_read(f"/proc/asound/{card_id}/{pcm}/sub0/hw_params"))
+    pcm1c optical in, pcm2c What U Hear. None when it's closed. `card_id`:
+    the detected card by default."""
+    return parse_hw_params(_read(boards.proc_path(card_id or boards.card_id(), pcm, "sub0", "hw_params")))
 
 
 # --- ae9-reload's notice (driver 0.12.13+) ---------------------------------------

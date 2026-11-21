@@ -8,6 +8,8 @@ pass them in.
 
     ae9       read-only AE-9 facts: PipeWire node detection, driver version
               and options, ae9-reload's notice, what the card's PCMs are open at
+    boards    which cards are ours: AE-9, AE-7 (AE-5 reserved), their models,
+              features and names (used through ae9)
     mixer     ALSA mixer controls via ctypes, read and WRITE (control apps only)
     palettes  the colour palettes (Command, Helix, Albino, Wololo)
     glass     Glass: see-through backgrounds, KDE blur behind
@@ -16,4 +18,4 @@ pass them in.
     testing   the fake AE-9 both apps' tests run against (tests only)
 """
 
-KIT_VERSION = "0.3.9"
+KIT_VERSION = "0.3.11"

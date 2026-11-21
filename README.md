@@ -395,8 +395,9 @@ Five counters should stay 0 (verb timeouts, lost replies, other-codec
 replies, bad write pointer, BDLs kept): when one rises, the line names it in
 red and the debug log records the change with the driver version. Late
 replies grow with traffic and are information only. The free router slots
-are a trend; under 10 is flagged, and at 0 DSP mode goes silent. The tooltip
-has all eight. Older drivers show "n/a". AudioMon reads the control every few
+are a trend; under 10 is flagged, and at 0 DSP mode goes silent. A ninth
+counter, late DAC I2C NACKs (planned for driver 0.12.17), should stay 0 too.
+The tooltip has them all. Drivers before 0.12.11 show "n/a". AudioMon reads the control every few
 seconds (the driver caches it, so the card isn't touched) and stops while the
 card isn't answering.
 
@@ -594,6 +595,11 @@ scale, the frameless window, AE-9 detection, the ALSA binding and the icon
 tool. `sbae9kit/` is a copy written by SbAe9-Kit's `tools/sync_kit.py`, and
 `tests/test_kit.py` fails if it's edited here instead. AudioMon never imports
 the kit's `mixer` (ALSA writes).
+
+Card detection comes from the kit too (`sbae9kit.boards`, shared with Sound
+Blaster Command): only cards bound to the AE driver, named by model ("AE-9",
+later "AE-7"), with meters only for the PCMs the card has. The tests run it
+on fake `/sys/class/sound` trees (`tests/test_cards.py`).
 
 The icon is cut by SbAe9-Kit's `tools/make_icons.py` from the artwork
 `Neon VU Meter Diagnostics.png`, which is kept outside the repo.

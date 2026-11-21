@@ -279,7 +279,7 @@ class AppTitleBar(frame.TitleBar):
         names = QVBoxLayout()
         names.setSpacing(0)
         names.addWidget(label("SbAe9-AudioMon", "appTitle"))
-        names.addWidget(label("AE-9", "deviceName"))
+        names.addWidget(label(core.card_short(), "deviceName"))
         h.addLayout(names)
         h.addStretch(1)
         self.buttons = []
@@ -309,7 +309,7 @@ class MainWindow(QWidget):
         self.cfg = cfg
         self.log = log
         self.setObjectName("root")
-        self.setWindowTitle("SbAe9-AudioMon — AE-9")
+        self.setWindowTitle(f"SbAe9-AudioMon — {core.card_short()}")
         self.setWindowIcon(app_icon())
         self.resize(1320, 860)
 
@@ -375,7 +375,7 @@ class MainWindow(QWidget):
         bl.setSpacing(16)
         self.dot = StatusDot()
         bl.addWidget(self.dot)
-        bl.addWidget(label("AE-9", "logo"))
+        bl.addWidget(label(core.card_short(), "logo"))
         sep = QFrame()
         sep.setFixedSize(2, 26)
         sep.setStyleSheet(f"background:{T.TEXT};")

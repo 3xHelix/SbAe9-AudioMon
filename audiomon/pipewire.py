@@ -145,17 +145,19 @@ def is_ours(n):
     return n.props.get("application.name") == APP_NAME or ae9.is_app_node(n.props)
 
 
-def is_ae9(n):
-    """Shared detection (sbae9kit.ae9): by name, never PCI address or card number."""
-    return ae9.is_ae9(n.props)
+def is_ae9(n, card=None):
+    """Shared detection (sbae9kit.ae9): one of our cards' nodes (only `card`'s,
+    an sbae9kit Card, when given). Never another driver's."""
+    return ae9.is_our_card(n.props, card)
 
 
-def find_ae9(snap):
-    """Locate the AE-9 nodes. Returns dict key -> node (or None)."""
+def find_ae9(snap, card=None):
+    """Locate the card's nodes (`card`: only that card's, for a machine with
+    two of our cards). Returns dict key -> node (or None)."""
     found = {"monitor": None, "optical_out": None, "wuh": None, "mic": None,
              "optical": None, "rear_rca": None}
     for n in sorted(snap.nodes.values(), key=lambda n: n.id):
-        if is_ours(n) or not is_ae9(n):
+        if is_ours(n) or not is_ae9(n, card):
             continue
         name = n.name.lower()
         if n.media_class == "Audio/Sink":
