@@ -5,7 +5,11 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## 0.4.11 (2026-11-20)
+## 0.4.11 (2026-11-21)
+
+For [driver 0.12.16](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.16)
+(nothing AudioMon reads changed in it). Also includes 0.4.10, which wasn't
+released on its own.
 
 Groundwork for more than one card model (the AE-9 now, the AE-7 later). On
 an AE-9 nothing changes.

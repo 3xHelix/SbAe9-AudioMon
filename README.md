@@ -13,7 +13,7 @@ changes your audio: it only adds its own meter links and reads the driver's
 controls.
 
 This release pairs with
-[SbAe9-Drv v0.12.15](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.15).
+[SbAe9-Drv v0.12.16](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.16).
 
 ---
 
