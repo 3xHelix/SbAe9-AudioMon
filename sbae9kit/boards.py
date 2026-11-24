@@ -85,6 +85,15 @@ class Model:
 #   line_in          a Line-In input
 #   input_select     a Microphone / Line-In combo jack ("Multipurpose Input Select")
 #   front_mic        a Front Microphone (front-panel audio header)
+#   speaker_setup    Speaker Setup: Bass Redirect, speaker levels and distances
+# Rates and formats (None: the app keeps its own driver-version logic, as on
+# the AE-9; a version check can't tell the cards apart, both report the same):
+#   dsp_rates        playback rates in DSP mode
+#   direct_rates     playback rates in Direct Mode
+#   direct_channels  Direct Mode's channel count
+#   mic_rates        mic capture rates
+#   whu_rates        What U Hear capture rates
+#   formats          playback sample formats
 # Sources: the driver for the AE-9; Creative's Sound Blaster Command support
 # notes (AE-9 200213, AE-7 200221, AE-5 / AE-5 Plus 200282) for the others.
 _SW_GAIN = ("Low (16 - 31 ohm)", "Normal (32 - 149 ohm)", "High (150 - 600 ohm)")
@@ -93,15 +102,27 @@ MODELS = {
         "head_unit": True, "optical_in": True, "direct_51": True, "dsd": True,
         "hp_gain": "switch", "dsp_51_analog": True, "optical_out_max": 192000,
         "dac_filters": 7, "lighting": False, "encoder": True,
-        "aux_in": True, "line_in": False, "input_select": False, "front_mic": False}),
+        "aux_in": True, "line_in": False, "input_select": False, "front_mic": False,
+        "speaker_setup": True, "dsp_rates": None, "direct_rates": None,
+        "direct_channels": None, "mic_rates": None, "whu_rates": None, "formats": None}),
     "ae7": Model("ae7", "AE-7", "Sound Blaster AE-7", "AE7", "ae7", (0x0081,), True,
-                 provisional=True, features={
-        "head_unit": False, "optical_in": False, "direct_51": False, "dsd": True,
+                 provisional=True, features={     # driver kit 11 (ae7-k11); confirm on 0.13.0
+        "head_unit": False, "optical_in": False, "direct_51": False,
+        "dsd": False,                     # the driver has no DSD
         "hp_gain": "software", "hp_gain_names": _SW_GAIN, "dsp_51_analog": True,
-        "optical_out_max": 96000, "dac_filters": 3,
+        "optical_out_max": None,          # the driver has no optical out (the board does)
+        "dac_filters": 3,
         "dac_filter_names": ("Fast Roll Off", "Slow Roll Off", "Minimum Phase"),
-        "lighting": False, "encoder": True,
-        "aux_in": False, "line_in": True, "input_select": True, "front_mic": False}),
+        "lighting": False,
+        "encoder": False,                 # no encoder PCM (it rides the optical)
+        "aux_in": False, "line_in": True, "input_select": True, "front_mic": False,
+        "speaker_setup": False,
+        "dsp_rates": (48000,),            # stereo and 5.1
+        "direct_rates": (44100, 48000, 88200, 96000, 192000, 384000),   # no 176.4
+        "direct_channels": 2,
+        "mic_rates": (44100, 48000, 96000),
+        "whu_rates": (44100, 48000),
+        "formats": ("S32_LE",)}),
     "ae5": Model("ae5", "AE-5", "Sound Blaster AE-5", "AE5", "ae5", (0x0051, 0x0191), False,
                  provisional=True, pci_devices=(0x0012,), features={
         "head_unit": False, "optical_in": False, "direct_51": False, "dsd": False,

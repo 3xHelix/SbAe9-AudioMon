@@ -101,7 +101,7 @@ def write_reload_notice(path, pid=None, age_s=0.0):
 AE9_CARD = ("AE9", "Sound Blaster AE-9", "Creative Labs Sound Blaster AE-9 at 0xfbf04000 irq 44",
             (0x1102, 0x0071), "snd-hda-codec-creative-ae9", ("0p", "0c", "1c", "2c", "3c", "4p"))
 AE7_CARD = ("AE7", "Sound Blaster AE-7", "Creative Labs Sound Blaster AE-7 at 0xfc004000 irq 45",
-            (0x1102, 0x0081), "snd-hda-codec-creative-ae9", ("0p", "0c", "2c", "4p"))
+            (0x1102, 0x0081), "snd-hda-codec-creative-ae9", ("0p", "0c", "2c"))   # kit 11: no PCM 4 (encoder)
 AE7_INTREE = ("Generic", "HD-Audio Generic", "HD-Audio Generic at 0xfc004000 irq 45",
               (0x1102, 0x0081), "snd_hda_intel", ("0p", "0c"))   # an AE-7 on the in-tree driver
 AE5_CARD = ("AE5", "Sound Blaster AE-5", "Creative Labs Sound Blaster AE-5 at 0xfc104000 irq 46",

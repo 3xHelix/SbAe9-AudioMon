@@ -32,7 +32,7 @@ class Detection(unittest.TestCase):
         self.assertEqual(core.card_short(), "AE-7")
         self.assertEqual(core.card_name(), "Sound Blaster AE-7")
         taps = self.taps()
-        self.assertEqual(list(taps), ["monitor", "optical_out", "wuh", "mic"])   # no optical / rear RCA in
+        self.assertEqual(list(taps), ["monitor", "wuh", "mic"])   # no optical out, optical in or rear RCA in
         self.assertEqual(taps["monitor"], "AE-7 Output (monitor)")
         self.assertEqual(taps["mic"], "AE-7 Mic / Aux")                          # no head unit
         self.assertEqual(driverstate.card_proc(), "/proc/asound/AE7")
@@ -84,7 +84,7 @@ class OnAnAE7(MonitorTest):
     def test_named_and_metered_as_an_ae7(self):
         process(300)
         self.assertEqual(self.win.windowTitle(), "SbAe9-AudioMon — AE-7")
-        self.assertEqual(list(self.view.fixed), ["monitor", "optical_out", "wuh", "mic"])
+        self.assertEqual(list(self.view.fixed), ["monitor", "wuh", "mic"])
         self.assertIn("AE-7 Output (monitor): found", self.log_text())
         self.assertNotIn("Rear RCA", self.log_text())
 
