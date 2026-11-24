@@ -4,6 +4,7 @@
 import functools
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -104,16 +105,125 @@ def choose_channels(n):
     return CHANNEL_CHOICES[-1]
 
 
+# Card detection: sbae9kit's (ALSA id, card names, PCI subsystem), told what
+# the driver's "Card Model" control says when it has one (0.13.0+).
+CARD_MODEL = "Card Model"    # iface CARD, read-only, one item: "Sound Blaster AE-9" / "... AE-7"
+_ITEM = re.compile(r"; Item #(\d+) '(.*)'")
+_VALUE = re.compile(r"^\s*: values=(\d+)", re.M)
+_found = []                  # [cards] once looked, until redetect()
+
+
+def read_card_model(index):
+    """The driver's "Card Model" of ALSA card `index` (its one item), or None
+    (drivers before 0.13.0, or amixer can't read it). Read only, never set."""
+    try:
+        r = subprocess.run(child_cmd(["amixer", "-c", str(index), "cget", f"iface=CARD,name={CARD_MODEL}"]),
+                           capture_output=True, text=True, timeout=3, env=dict(os.environ, LC_ALL="C"))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = _VALUE.search(r.stdout) if r.returncode == 0 else None
+    return dict(_ITEM.findall(r.stdout)).get(value.group(1)) if value else None
+
+
+def our_card_numbers():
+    """The ALSA card numbers bound to the AE driver, recognised or not (a card
+    only its "Card Model" names: a renamed id, say)."""
+    sys_sound = os.path.join(ae9.boards.ROOT, "sys", "class", "sound")
+    try:
+        entries = os.listdir(sys_sound)
+    except OSError:
+        return []
+    out = []
+    for e in entries:
+        m = re.fullmatch(r"card(\d+)", e)
+        if not m:
+            continue
+        try:
+            drv = os.readlink(os.path.join(sys_sound, e, "device", "driver"))
+        except OSError:
+            continue
+        if os.path.basename(drv).replace("-", "_") == ae9.boards.DRIVER:
+            out.append(int(m.group(1)))
+    return sorted(out)
+
+
+def cards():
+    """Every card on the AE driver (sbae9kit Cards, by ALSA card number),
+    looked up once until redetect()."""
+    if not _found:
+        models = {i: read_card_model(i) for i in our_card_numbers()}
+        _found.append(ae9.find_cards(card_model={i: m for i, m in models.items() if m}))
+    return _found[0]
+
+
+def card():
+    """The card AudioMon meters: the first on the AE driver, or None."""
+    found = cards()
+    return found[0] if found else None
+
+
+def redetect():
+    """Look for the cards again (after a driver reload, or none was found)."""
+    _found.clear()
+    ae9.refresh()
+    return card()
+
+
+def card_id():
+    """The detected card's ALSA id: "AE9" when none is found, as before."""
+    c = card()
+    return c.id if c else ae9.boards.DEFAULT_ID
+
+
+# An AE-7 the driver doesn't run (0.13.0: experimental, opt-in with
+# ae9-ae7-enable): still on the kernel's own driver (snd_hda_intel), or refused
+# by ours and left on none. Found by its PCI ids, as SbAe9-SBC does.
+PCI_DEVICES = "/sys/bus/pci/devices"
+AE7_PCI = (0x1102, 0x0010, 0x1102, 0x0081)   # vendor, device, subsystem vendor, subsystem device
+# Driver 0.13.0-rc3+: with the AE-7 support off, ae9-ae7-enable parks an AE-7
+# (no driver at all) because the kernel's snd_hda_intel can hang the PC at boot
+# on AE-7s behind an ASMedia PCIe bridge. These files mean it's parked on purpose.
+AE7_PARK_FILES = ("/etc/udev/rules.d/00-ae7-park.rules", "/etc/modprobe.d/ae7-park.conf")
+
+
+def ae7_waiting():
+    """An AE-7 the driver doesn't run: "kernel" (on another driver), "parked"
+    (on none on purpose: the support is off, see AE7_PARK_FILES), "unbound"
+    (on none: enabling isn't finished), or None (none, or ours runs it)."""
+    try:
+        entries = sorted(os.listdir(PCI_DEVICES))
+    except OSError:
+        return None
+    for e in entries:
+        d = os.path.join(PCI_DEVICES, e)
+        ids = []
+        for f in ("vendor", "device", "subsystem_vendor", "subsystem_device"):
+            try:
+                with open(os.path.join(d, f)) as fh:
+                    ids.append(int(fh.read().strip(), 16))
+            except (OSError, ValueError):
+                ids.append(None)
+        if tuple(ids) != AE7_PCI:
+            continue
+        try:
+            drv = os.path.basename(os.readlink(os.path.join(d, "driver"))).replace("-", "_")
+        except OSError:
+            return "parked" if any(os.path.exists(f) for f in AE7_PARK_FILES) else "unbound"
+        if drv != ae9.boards.DRIVER:
+            return "kernel"
+    return None
+
+
 def card_short():
     """The detected card's short name for titles and labels: "AE-9", "AE-7"
-    (sbae9kit's detection; "AE-9" when no card is found, as before)."""
-    c = ae9.current()
+    ("AE-9" when no card is found, as before)."""
+    c = card()
     return c.short if c else "AE-9"
 
 
 def card_name():
     """The detected card's full name for sentences: "Sound Blaster AE-9"."""
-    c = ae9.current()
+    c = card()
     return c.name if c else "Sound Blaster AE-9"
 
 

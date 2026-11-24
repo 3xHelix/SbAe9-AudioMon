@@ -5,6 +5,34 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## 0.5.0 (unreleased)
+
+For driver 0.13.0, which adds experimental AE-7 support (opt-in with
+`ae9-ae7-enable`). Thanks to [s3boun3t](https://github.com/s3boun3t) for
+testing on an AE-7.
+
+### Added
+
+- Driver 0.13.0's "Card Model" control names each card on the AE driver, read
+  once with `amixer cget` when AudioMon looks for its card (and again after a
+  driver reload). The ALSA id, card names and PCI subsystem are still the
+  fallback for older drivers. A card only "Card Model" names (a renamed ALSA
+  id, say) is found too.
+- An AE-7 the driver doesn't run: one left on the kernel's own driver
+  (AE-7 support is off) or on no driver (enabling isn't finished). AudioMon
+  finds it by its PCI ids and shows a notice beside "App streams" with the
+  command to run, `sudo ae9-ae7-enable` (then reboot) or
+  `ae9-ae7-enable --status`. Without an AE-7, nothing changes.
+- A parked AE-7 (driver 0.13.0: with the support off, an AE-7 behind an
+  ASMedia bridge gets no driver on purpose, as the kernel's own one can hang
+  the PC) is told apart by the driver's park files, and its notice says why
+  it has no driver and how to turn the support on.
+
+### Changed
+
+- SbAe9-Kit 0.3.12: an AE-7 has no optical out, so it gets three meters
+  (Output, What U Hear, Mic / Aux). The AE-9 is unchanged.
+
 ## 0.4.11 (2026-11-21)
 
 For [driver 0.12.16](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.16)

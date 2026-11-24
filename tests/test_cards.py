@@ -6,7 +6,7 @@ exactly as before; an AE-7 gets only the meters its PCMs allow."""
 import unittest
 
 import support
-from sbae9kit import ae9, testing
+from sbae9kit import testing
 from audiomon import core, driverstate, monitor
 from test_ae9_monitor import MonitorTest, process
 
@@ -18,13 +18,13 @@ class Detection(unittest.TestCase):
         support.sound_tree(testing.AE9_CARD)
 
     def taps(self):
-        return {key: title for key, title, _, _ in monitor.card_taps(ae9.current())}
+        return {key: title for key, title, _, _ in monitor.card_taps(core.card())}
 
     def test_ae9(self):
         support.sound_tree(testing.HDMI_CARD, testing.AE9_CARD, testing.USB_CARD)
-        self.assertEqual(ae9.current().id, "AE9")
+        self.assertEqual(core.card().id, "AE9")
         self.assertEqual(core.card_short(), "AE-9")
-        self.assertEqual(monitor.card_taps(ae9.current()), monitor.FIXED_TAPS)   # as before
+        self.assertEqual(monitor.card_taps(core.card()), monitor.FIXED_TAPS)   # as before
         self.assertEqual(driverstate.card_proc(), "/proc/asound/AE9")
 
     def test_ae7(self):
@@ -40,21 +40,21 @@ class Detection(unittest.TestCase):
 
     def test_ae7_on_the_in_tree_driver_is_not_ours(self):
         support.sound_tree(testing.AE7_INTREE, testing.HDMI_CARD)
-        self.assertIsNone(ae9.current())
+        self.assertIsNone(core.card())
         self.assertEqual(core.card_short(), "AE-9")                 # as before detection
         self.assertEqual(list(self.taps()), ALL)
         self.assertEqual(driverstate.card_proc(), "/proc/asound/AE9")
 
     def test_no_card(self):
         support.sound_tree()
-        self.assertIsNone(ae9.current())
+        self.assertIsNone(core.card())
         self.assertEqual(list(self.taps()), ALL)
-        self.assertEqual(ae9.card_id(), "AE9")
+        self.assertEqual(core.card_id(), "AE9")
 
     def test_two_cards_first_by_number(self):
         support.sound_tree(testing.AE7_CARD, testing.AE9_CARD)
-        self.assertEqual(ae9.current().short, "AE-7")
-        self.assertEqual([c.id for c in ae9.find_cards()], ["AE7", "AE9"])
+        self.assertEqual(core.card().short, "AE-7")
+        self.assertEqual([c.id for c in core.cards()], ["AE7", "AE9"])
 
     def test_hw_params_follow_the_card(self):
         support.sound_tree(testing.AE7_CARD)

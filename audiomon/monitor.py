@@ -256,6 +256,19 @@ def stopped_notice():
             "reloaded: reload the driver or power the PC off (SbAe9-SBC shows the steps).")
 
 
+def ae7_notice(waiting):
+    """What to do about an AE-7 the driver doesn't run (core.ae7_waiting())."""
+    if waiting == "kernel":
+        return ("A Sound Blaster AE-7 is here, but the driver's AE-7 support (experimental) is off. "
+                "Turn it on with: sudo ae9-ae7-enable (in a terminal), then reboot.")
+    if waiting == "parked":
+        return ("A Sound Blaster AE-7 is here: its experimental support is off, and it's parked (no driver), "
+                "because the kernel's own driver can hang the PC on AE-7s with an ASMedia bridge. "
+                "Turn the support on with: sudo ae9-ae7-enable (in a terminal), then reboot.")
+    return ("A Sound Blaster AE-7 is here, but no driver runs it: enabling it isn't finished. "
+            "Check with: ae9-ae7-enable --status (in a terminal).")
+
+
 class AE9View(QWidget):
     """Auto-wires meters to the AE-9 and watches for dropouts."""
 
@@ -305,10 +318,10 @@ class AE9View(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(14)
         self.fixed = {}
-        self.card = ae9.current()
+        self.card = core.card()
         self.taps = card_taps(self.card)
         # with two of our cards, meter only the detected one's nodes
-        self.match_card = self.card if len(ae9.find_cards()) > 1 else None
+        self.match_card = self.card if len(core.cards()) > 1 else None
         for key, title, node_name, _gated in self.taps:
             passive = self.let_idle and key in ("monitor", "optical_out")
             p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive,
@@ -365,6 +378,13 @@ class AE9View(QWidget):
         self.log(f"SbAe9-AudioMon {__version__} AE-9 mode started (let the AE-9 idle: "
                  f"{'on' if self.let_idle else 'off'}, always capture inputs: "
                  f"{'on' if self.always_capture else 'off'}) | {core.driver_info()}")
+        waiting = core.ae7_waiting() if self.card is None else None
+        if waiting:
+            text = ae7_notice(waiting)
+            self.card_notice.setText(text)
+            self.card_notice.setToolTip(text)
+            self.card_notice.show()
+            self.log(text)
 
     # -- per-frame -------------------------------------------------------
 
@@ -581,7 +601,7 @@ class AE9View(QWidget):
             vals = list(self.health) + ["n/a"] * (len(driverstate.HEALTH_FIELDS) - len(self.health))
             tip = "\n".join(f"{f[1]}: {v}" for f, v in zip(driverstate.HEALTH_FIELDS, vals))
             tip += ("\n\nThe first five (and the DAC I2C NACKs) should stay 0. "
-                    f"Read with amixer -c {ae9.card_id()}, never written.")
+                    f"Read with amixer -c {core.card_id()}, never written.")
         self.health_lbl.setToolTip(tip)
 
     def _card_answering(self, answering, first):

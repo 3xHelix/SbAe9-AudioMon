@@ -12,8 +12,8 @@ the AE-9 driver, [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv). It never
 changes your audio: it only adds its own meter links and reads the driver's
 controls.
 
-This release pairs with
-[SbAe9-Drv v0.12.17](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.17).
+This release pairs with SbAe9-Drv v0.13.0. It also runs on an AE-7, whose
+driver support is experimental (see [The AE-7](#the-ae-7)).
 
 ---
 
@@ -28,6 +28,8 @@ This release pairs with
 - **Driver health** line and a notice when the card stops answering
   (driver 0.12.9+), letting go of the card so it can be reloaded, and while
   `ae9-reload` runs (driver 0.12.13+).
+- **AE-7 (experimental)**: named and metered as an AE-7, with a notice and the
+  command to run when the driver's AE-7 support is off.
 - **Lets the card idle**: meters never keep the AE-9 awake by default.
 - **Manual Meters**: two 2 to 8 channel meters you wire up by hand.
 - The same four palettes, **Glass** look and UI scaling as Sound Blaster
@@ -438,6 +440,33 @@ meter looks normal) doesn't show on them, so the dump is what shows it.
 
 ---
 
+## The AE-7
+
+*Experimental.* Driver 0.13.0 runs the AE-7 only when you turn it on: until
+then the card stays on the kernel's own driver and AudioMon shows a notice
+beside "App streams" with what to do:
+
+```sh
+sudo ae9-ae7-enable        # then reboot
+ae9-ae7-enable --status    # if the notice says enabling isn't finished
+```
+
+With the support off, the driver's tools usually **park** the AE-7 (driver
+0.13.0): no driver takes it, on purpose, because the kernel's own driver can
+hang the PC at boot on AE-7s with an ASMedia PCIe bridge. AudioMon tells a
+parked card (one of the park files, `/etc/udev/rules.d/00-ae7-park.rules` or
+`/etc/modprobe.d/ae7-park.conf`, is there) from one whose enabling isn't
+finished, and both from one on the kernel's driver. `ae9-ae7-enable --status`
+shows which, and the bridge.
+
+On an AE-7 the window, the meters and the debug log say "AE-7", and you get
+three meters: Output, What U Hear and Mic / Aux. The AE-7 has no optical out,
+optical in, rear RCA in or head unit. The driver's `docs/AE7.md` has the
+rest. Thanks to [s3boun3t](https://github.com/s3boun3t) for testing on an
+AE-7.
+
+---
+
 ## Driver versions
 
 AudioMon works with older drivers and leaves out what they can't do. For
@@ -460,6 +489,7 @@ everything, use the latest
 | Driver health line | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
 | Letting go of the card while `ae9-reload` runs | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
 | Late DAC I2C NACKs on the driver health line | [0.12.17](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.17) |
+| "Card Model" detection, the AE-7 (experimental) | 0.13.0 |
 
 </details>
 
@@ -599,8 +629,10 @@ the kit's `mixer` (ALSA writes).
 
 Card detection comes from the kit too (`sbae9kit.boards`, shared with Sound
 Blaster Command): only cards bound to the AE driver, named by model ("AE-9",
-later "AE-7"), with meters only for the PCMs the card has. The tests run it
-on fake `/sys/class/sound` trees (`tests/test_cards.py`).
+"AE-7"), with meters only for the PCMs the card has. Driver 0.13.0's "Card
+Model" control names each card first (`audiomon/core.py` reads it with
+`amixer cget`). The tests run it on fake `/sys/class/sound` trees
+(`tests/test_cards.py`, `tests/test_card_model.py`).
 
 The icon is cut by SbAe9-Kit's `tools/make_icons.py` from the artwork
 `Neon VU Meter Diagnostics.png`, which is kept outside the repo.

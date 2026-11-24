@@ -13,6 +13,7 @@ The fake card is support.PW (reset() makes a fresh one per test).
 """
 
 import os
+import shutil
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +23,8 @@ from sbae9kit import testing  # noqa: E402
 
 FAKE_DRIVER = "snd_hda_codec_creative_ae9 0.9.2 srcversion FAKE0000000000000000000"
 PW = None
+# the driver's "Card Model" per ALSA card number (0.13.0+); empty: an older driver
+CARD_MODELS = {}
 SOUND_ROOT = None   # the fake /sys/class/sound + /proc/asound card detection reads
 CONTROLS = None     # the fake ControlWatcher of the window made last
 HW_PARAMS = None    # the fake /proc/asound/AE9/pcm0p/sub0/hw_params
@@ -116,13 +119,20 @@ def _add_formats(pw):
 
 def sound_tree(*cards):
     """Point the kit's card detection at fake cards (testing.AE9_CARD, ...;
-    none at all for no card). reset() puts the AE-9 back."""
-    return testing.fake_sound_tree(SOUND_ROOT, cards)
+    none at all for no card). reset() puts the AE-9 back, and no Card Model."""
+    root = testing.fake_sound_tree(SOUND_ROOT, cards)
+    from audiomon import core
+    core.redetect()
+    return root
 
 
 def reset(**card):
     """A fresh fake card for the next test or scenario."""
     global PW
+    CARD_MODELS.clear()
+    from audiomon import core
+    shutil.rmtree(core.PCI_DEVICES, ignore_errors=True)
+    shutil.rmtree(os.path.dirname(core.AE7_PARK_FILES[0]), ignore_errors=True)
     sound_tree(testing.AE9_CARD)        # card detection finds the AE-9, never the host's cards
     # driver 0.12.0: Rear RCA In and Optical Out too
     PW = testing.FakePipeWire(**dict(dict(rear_rca=True, optical_out=True), **card))
@@ -169,6 +179,10 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     pipewire.Linker = lambda: testing.FakeLinker(current)
     capture.Capture = testing.make_fake_capture(current, core.CHANNEL_MAPS, core.RATE, app_name=core.APP_NAME)
     core.driver_info = lambda: FAKE_DRIVER
+    REAL.setdefault("read_card_model", core.read_card_model)
+    core.read_card_model = lambda index: CARD_MODELS.get(index)
+    core.PCI_DEVICES = os.path.join(tmp, "pci-devices")     # an AE-7 the driver doesn't run; never the machine's
+    core.AE7_PARK_FILES = tuple(os.path.join(tmp, "ae7-park", n) for n in ("00-ae7-park.rules", "ae7-park.conf"))
     if time_scale <= 0.1:          # test speed (the demo keeps the real timings)
         monitor.WIRE_GRACE = 0.3
         monitor.SILENT_AFTER = 0.25

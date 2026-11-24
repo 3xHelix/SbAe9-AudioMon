@@ -16,6 +16,7 @@ import time
 
 from sbae9kit import ae9
 
+from . import core
 from .core import child_cmd
 
 # What a dropout is most likely to follow, then the speaker setup that can make
@@ -92,7 +93,7 @@ RELOAD_PATHS = None
 
 def card_proc():
     """/proc/asound/<the detected card's id> ("AE9" when none is found)."""
-    return f"/proc/asound/{ae9.card_id()}"
+    return f"/proc/asound/{core.card_id()}"
 
 
 def hw_params_path(pcm="pcm0p"):
@@ -316,7 +317,7 @@ class ControlWatcher:
 
     @property
     def card(self):
-        return self._card or ae9.card_id()
+        return self._card or core.card_id()
 
     def _watch_notice(self):
         """Let go of the card as soon as an ae9-reload starts."""
@@ -401,8 +402,8 @@ class ControlWatcher:
                 self._wait_released()
             elif not self._stopping:
                 time.sleep(3.0)     # no card (or it went away): try again
-                if ae9.current() is None:
-                    ae9.refresh()   # look for a card again
+                if core.card() is None:
+                    core.redetect()  # look for a card again
 
     def _wait_released(self):
         """Hold off the card until it's safe to open it again."""
@@ -411,7 +412,7 @@ class ControlWatcher:
         else:
             self._wait_for_reload()
         if not self._stopping:
-            ae9.refresh()           # the reloaded driver's card (its id can't change, its number can)
+            core.redetect()         # the reloaded driver's card (its id can't change, its number can)
             if self._reload:
                 self._q.put((RELOAD, "reopened"))
             self._reload = False
