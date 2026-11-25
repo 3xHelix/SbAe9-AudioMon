@@ -12,8 +12,9 @@ the AE-9 driver, [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv). It never
 changes your audio: it only adds its own meter links and reads the driver's
 controls.
 
-This release pairs with SbAe9-Drv v0.13.0. It also runs on an AE-7, whose
-driver support is experimental (see [The AE-7](#the-ae-7)).
+This release pairs with
+[SbAe9-Drv v0.13.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.13.0). It also runs on an AE-7,
+whose driver support is experimental (see [The AE-7](#the-ae-7)).
 
 ---
 
@@ -489,7 +490,7 @@ everything, use the latest
 | Driver health line | [0.12.11](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.11) |
 | Letting go of the card while `ae9-reload` runs | [0.12.13](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.13) |
 | Late DAC I2C NACKs on the driver health line | [0.12.17](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.12.17) |
-| "Card Model" detection, the AE-7 (experimental) | 0.13.0 |
+| "Card Model" detection, the AE-7 (experimental) | [0.13.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.13.0) |
 
 </details>
 

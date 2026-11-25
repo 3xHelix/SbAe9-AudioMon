@@ -175,45 +175,6 @@ def card_id():
     return c.id if c else ae9.boards.DEFAULT_ID
 
 
-# An AE-7 the driver doesn't run (0.13.0: experimental, opt-in with
-# ae9-ae7-enable): still on the kernel's own driver (snd_hda_intel), or refused
-# by ours and left on none. Found by its PCI ids, as SbAe9-SBC does.
-PCI_DEVICES = "/sys/bus/pci/devices"
-AE7_PCI = (0x1102, 0x0010, 0x1102, 0x0081)   # vendor, device, subsystem vendor, subsystem device
-# Driver 0.13.0-rc3+: with the AE-7 support off, ae9-ae7-enable parks an AE-7
-# (no driver at all) because the kernel's snd_hda_intel can hang the PC at boot
-# on AE-7s behind an ASMedia PCIe bridge. These files mean it's parked on purpose.
-AE7_PARK_FILES = ("/etc/udev/rules.d/00-ae7-park.rules", "/etc/modprobe.d/ae7-park.conf")
-
-
-def ae7_waiting():
-    """An AE-7 the driver doesn't run: "kernel" (on another driver), "parked"
-    (on none on purpose: the support is off, see AE7_PARK_FILES), "unbound"
-    (on none: enabling isn't finished), or None (none, or ours runs it)."""
-    try:
-        entries = sorted(os.listdir(PCI_DEVICES))
-    except OSError:
-        return None
-    for e in entries:
-        d = os.path.join(PCI_DEVICES, e)
-        ids = []
-        for f in ("vendor", "device", "subsystem_vendor", "subsystem_device"):
-            try:
-                with open(os.path.join(d, f)) as fh:
-                    ids.append(int(fh.read().strip(), 16))
-            except (OSError, ValueError):
-                ids.append(None)
-        if tuple(ids) != AE7_PCI:
-            continue
-        try:
-            drv = os.path.basename(os.readlink(os.path.join(d, "driver"))).replace("-", "_")
-        except OSError:
-            return "parked" if any(os.path.exists(f) for f in AE7_PARK_FILES) else "unbound"
-        if drv != ae9.boards.DRIVER:
-            return "kernel"
-    return None
-
-
 def card_short():
     """The detected card's short name for titles and labels: "AE-9", "AE-7"
     ("AE-9" when no card is found, as before)."""

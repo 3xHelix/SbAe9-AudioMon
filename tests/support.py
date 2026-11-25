@@ -130,9 +130,9 @@ def reset(**card):
     """A fresh fake card for the next test or scenario."""
     global PW
     CARD_MODELS.clear()
-    from audiomon import core
-    shutil.rmtree(core.PCI_DEVICES, ignore_errors=True)
-    shutil.rmtree(os.path.dirname(core.AE7_PARK_FILES[0]), ignore_errors=True)
+    # no AE-7 on the fake PCI bus, and no park files (testing.fake_ae7_pci adds them)
+    shutil.rmtree(os.path.join(SOUND_ROOT, "sys", "bus", "pci", "devices"), ignore_errors=True)
+    shutil.rmtree(os.path.join(SOUND_ROOT, "etc"), ignore_errors=True)
     sound_tree(testing.AE9_CARD)        # card detection finds the AE-9, never the host's cards
     # driver 0.12.0: Rear RCA In and Optical Out too
     PW = testing.FakePipeWire(**dict(dict(rear_rca=True, optical_out=True), **card))
@@ -181,8 +181,6 @@ def setup(offscreen=True, time_scale=0.06, quiet=True):
     core.driver_info = lambda: FAKE_DRIVER
     REAL.setdefault("read_card_model", core.read_card_model)
     core.read_card_model = lambda index: CARD_MODELS.get(index)
-    core.PCI_DEVICES = os.path.join(tmp, "pci-devices")     # an AE-7 the driver doesn't run; never the machine's
-    core.AE7_PARK_FILES = tuple(os.path.join(tmp, "ae7-park", n) for n in ("00-ae7-park.rules", "ae7-park.conf"))
     if time_scale <= 0.1:          # test speed (the demo keeps the real timings)
         monitor.WIRE_GRACE = 0.3
         monitor.SILENT_AFTER = 0.25

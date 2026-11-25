@@ -6,7 +6,6 @@ driver; AudioMon hands it to the kit's detection, with the ALSA id, names and
 PCI subsystem as the fallback for older drivers. An AE-7 left on the kernel's
 own driver, or on none, gets a notice with the command to run."""
 
-import os
 import subprocess
 import unittest
 from types import SimpleNamespace
@@ -16,7 +15,7 @@ import support  # noqa: E402
 
 support.setup()
 
-from sbae9kit import testing  # noqa: E402
+from sbae9kit import ae9, testing  # noqa: E402
 from audiomon import core, monitor  # noqa: E402
 from test_ae9_monitor import MonitorTest, process  # noqa: E402
 
@@ -29,19 +28,6 @@ CGET = """numid=76,iface=CARD,name='Card Model'
 # only "Card Model" can name it.
 RENAMED = ("Studio", "HD-Audio", "HD-Audio at 0xfc004000 irq 45", None,
            testing.AE9_CARD[4], testing.AE7_CARD[5])
-
-
-def pci_device(slot, ids, driver=None):
-    """A fake /sys/bus/pci/devices entry (vendor, device, subsystem ids)."""
-    d = os.path.join(core.PCI_DEVICES, slot)
-    os.makedirs(d, exist_ok=True)
-    for name, v in zip(("vendor", "device", "subsystem_vendor", "subsystem_device"), ids):
-        with open(os.path.join(d, name), "w") as f:
-            f.write(f"0x{v:04x}\n")
-    if driver:
-        target = os.path.join(support.SOUND_ROOT, "drivers", driver)
-        os.makedirs(target, exist_ok=True)
-        os.symlink(target, os.path.join(d, "driver"))
 
 
 class ReadCardModel(unittest.TestCase):
@@ -101,56 +87,42 @@ class Detection(unittest.TestCase):
 
 
 class AE7Waiting(unittest.TestCase):
+    """The kit's ae7_waiting() on the fake tree, as AudioMon uses it."""
+
     def tearDown(self):
         support.reset()
 
+    def ae7(self, **kw):
+        testing.fake_ae7_pci(support.SOUND_ROOT, **kw)
+        return ae9.ae7_waiting()
+
     def test_none(self):
-        self.assertIsNone(core.ae7_waiting())
-        pci_device("0000:0a:00.0", (0x1102, 0x0010, 0x1102, 0x0071), "snd-hda-codec-creative-ae9")   # an AE-9
-        self.assertIsNone(core.ae7_waiting())
+        self.assertIsNone(ae9.ae7_waiting())
+        self.assertIsNone(self.ae7(driver=ae9.boards.DRIVER))                    # ours runs it
+        self.assertIsNone(self.ae7(driver=ae9.boards.DRIVER, parked=True))
 
-    def test_on_the_kernels_driver(self):
-        pci_device("0000:0b:00.0", (0x1102, 0x0010, 0x1102, 0x0081), "snd_hda_intel")
-        self.assertEqual(core.ae7_waiting(), "kernel")
+    def test_states(self):
+        self.assertEqual(self.ae7(driver="snd_hda_intel"), "kernel")
+        self.assertEqual(self.ae7(driver="snd_hda_intel", parked=True), "kernel")   # a driver wins
+        self.assertEqual(self.ae7(), "unbound")                                   # no park files
+        self.assertEqual(self.ae7(parked=True), "parked")
 
-    def test_on_no_driver(self):
-        pci_device("0000:0b:00.0", (0x1102, 0x0010, 0x1102, 0x0081))
-        self.assertEqual(core.ae7_waiting(), "unbound")      # no park files: enabling isn't finished
-
-    def park_file(self, i):
-        os.makedirs(os.path.dirname(core.AE7_PARK_FILES[i]), exist_ok=True)
-        open(core.AE7_PARK_FILES[i], "w").close()
-
-    def test_parked(self):
-        """0.13.0-rc3+: support off parks it (no driver) on purpose."""
-        for i in range(2):
-            support.reset()
-            pci_device("0000:0b:00.0", (0x1102, 0x0010, 0x1102, 0x0081))
-            self.park_file(i)
-            self.assertEqual(core.ae7_waiting(), "parked", core.AE7_PARK_FILES[i])
-
-    def test_park_files_dont_matter_on_a_driver(self):
-        self.park_file(0)
-        self.park_file(1)
-        pci_device("0000:0b:00.0", (0x1102, 0x0010, 0x1102, 0x0081), "snd_hda_intel")
-        self.assertEqual(core.ae7_waiting(), "kernel")
+    def test_reset_clears_it(self):
+        self.ae7(parked=True)
         support.reset()
-        self.park_file(0)
-        self.assertIsNone(core.ae7_waiting())                # no AE-7 at all
+        self.assertIsNone(ae9.ae7_waiting())
 
     def test_notices(self):
-        self.assertIn("sudo ae9-ae7-enable", monitor.ae7_notice("kernel"))
-        self.assertIn("isn't finished", monitor.ae7_notice("unbound"))
-        self.assertIn("ae9-ae7-enable --status", monitor.ae7_notice("unbound"))
-        parked = monitor.ae7_notice("parked")
-        self.assertIn("parked (no driver)", parked)
-        self.assertIn("ASMedia", parked)
-        self.assertIn("sudo ae9-ae7-enable", parked)
-        self.assertNotIn("isn't finished", parked)
-
-    def test_ours_runs_it(self):
-        pci_device("0000:0b:00.0", (0x1102, 0x0010, 0x1102, 0x0081), "snd-hda-codec-creative-ae9")
-        self.assertIsNone(core.ae7_waiting())
+        kernel, parked, unbound = (monitor.ae7_notice(w) for w in ("kernel", "parked", "unbound"))
+        self.assertTrue(kernel.endswith("Run in a terminal: sudo ae9-ae7-enable, then reboot."))
+        self.assertIn("parked", parked)
+        self.assertIn("ASMedia bridge, most from 2022 on", parked)
+        self.assertTrue(parked.endswith("Run in a terminal: sudo ae9-ae7-enable, then reboot."))
+        self.assertTrue(unbound.endswith("Run in a terminal: ae9-ae7-enable --status."))
+        for text in (kernel, parked, unbound):
+            self.assertTrue(text.startswith("Sound Blaster AE-7 found. "))
+            self.assertNotIn("--stock", text)
+            self.assertNotIn("--disable", text)
 
 
 class AE7NoticeShown(MonitorTest):
@@ -158,7 +130,7 @@ class AE7NoticeShown(MonitorTest):
 
     def setUp(self):
         # found by AE7Waiting's PCI ids; with no card of ours, no controls to follow
-        with mock.patch.object(core, "ae7_waiting", return_value="kernel"), \
+        with mock.patch.object(ae9, "ae7_waiting", return_value="kernel"), \
                 mock.patch.dict(support.DRIVER_STATE, clear=True):
             super().setUp()
 

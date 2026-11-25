@@ -257,16 +257,11 @@ def stopped_notice():
 
 
 def ae7_notice(waiting):
-    """What to do about an AE-7 the driver doesn't run (core.ae7_waiting())."""
-    if waiting == "kernel":
-        return ("A Sound Blaster AE-7 is here, but the driver's AE-7 support (experimental) is off. "
-                "Turn it on with: sudo ae9-ae7-enable (in a terminal), then reboot.")
-    if waiting == "parked":
-        return ("A Sound Blaster AE-7 is here: its experimental support is off, and it's parked (no driver), "
-                "because the kernel's own driver can hang the PC on AE-7s with an ASMedia bridge. "
-                "Turn the support on with: sudo ae9-ae7-enable (in a terminal), then reboot.")
-    return ("A Sound Blaster AE-7 is here, but no driver runs it: enabling it isn't finished. "
-            "Check with: ae9-ae7-enable --status (in a terminal).")
+    """What to do about an AE-7 the driver doesn't run (ae9.ae7_waiting()):
+    the kit's sentence and command, shared with SbAe9-SBC."""
+    sentence, command, reboot = ae9.AE7_WAITING[waiting]
+    return (f"Sound Blaster AE-7 found. {sentence} Run in a terminal: {command}"
+            + (", then reboot." if reboot else "."))
 
 
 class AE9View(QWidget):
@@ -378,7 +373,7 @@ class AE9View(QWidget):
         self.log(f"SbAe9-AudioMon {__version__} AE-9 mode started (let the AE-9 idle: "
                  f"{'on' if self.let_idle else 'off'}, always capture inputs: "
                  f"{'on' if self.always_capture else 'off'}) | {core.driver_info()}")
-        waiting = core.ae7_waiting() if self.card is None else None
+        waiting = ae9.ae7_waiting() if self.card is None else None
         if waiting:
             text = ae7_notice(waiting)
             self.card_notice.setText(text)

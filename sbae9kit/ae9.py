@@ -17,7 +17,8 @@ import time
 
 from . import boards
 from .boards import (  # noqa: F401
-    Card, Model, MODELS, card_id, current, find_card, find_cards, identify, refresh,
+    AE7_ENABLE, AE7_PARK_FILES, AE7_STATUS, AE7_WAITING, Card, Model, MODELS, ae7_waiting,
+    card_id, current, find_card, find_cards, identify, refresh,
 )
 
 DRIVER = "snd_hda_codec_creative_ae9"   # the module, for every board

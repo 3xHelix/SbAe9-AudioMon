@@ -5,11 +5,11 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
-## 0.5.0 (unreleased)
+## 0.5.0 (2026-11-25)
 
-For driver 0.13.0, which adds experimental AE-7 support (opt-in with
-`ae9-ae7-enable`). Thanks to [s3boun3t](https://github.com/s3boun3t) for
-testing on an AE-7.
+For [driver 0.13.0](https://github.com/3xHelix/SbAe9-Drv/releases/tag/v0.13.0),
+which adds experimental AE-7 support (opt-in with `ae9-ae7-enable`). Thanks
+to [s3boun3t](https://github.com/s3boun3t) for testing on an AE-7.
 
 ### Added
 
@@ -20,9 +20,9 @@ testing on an AE-7.
   id, say) is found too.
 - An AE-7 the driver doesn't run: one left on the kernel's own driver
   (AE-7 support is off) or on no driver (enabling isn't finished). AudioMon
-  finds it by its PCI ids and shows a notice beside "App streams" with the
-  command to run, `sudo ae9-ae7-enable` (then reboot) or
-  `ae9-ae7-enable --status`. Without an AE-7, nothing changes.
+  finds it by its PCI ids (SbAe9-Kit's `ae7_waiting()`) and shows a notice
+  beside "App streams" with the command to run, `sudo ae9-ae7-enable` (then
+  reboot) or `ae9-ae7-enable --status`. Without an AE-7, nothing changes.
 - A parked AE-7 (driver 0.13.0: with the support off, an AE-7 behind an
   ASMedia bridge gets no driver on purpose, as the kernel's own one can hang
   the PC) is told apart by the driver's park files, and its notice says why
@@ -32,6 +32,8 @@ testing on an AE-7.
 
 - SbAe9-Kit 0.3.12: an AE-7 has no optical out, so it gets three meters
   (Output, What U Hear, Mic / Aux). The AE-9 is unchanged.
+- SbAe9-Kit 0.3.13: the AE-7 check and its notice wording come from the kit,
+  the same as in SbAe9-SBC.
 
 ## 0.4.11 (2026-11-21)
 

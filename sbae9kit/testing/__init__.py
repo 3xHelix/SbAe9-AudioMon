@@ -156,6 +156,37 @@ def fake_sound_tree(root, cards=(AE9_CARD,), point=True):
     return root
 
 
+def fake_ae7_pci(root, driver=None, parked=False, slot="0000:07:00.0", point=True):
+    """A fake AE-7 PCI device under `root`/sys/bus/pci/devices for
+    boards.ae7_waiting(): `driver` bound to it (None: no driver, e.g.
+    "snd_hda_intel" or boards.DRIVER), and the driver's AE-7 park files if
+    `parked`. `point`: aim sbae9kit.boards at `root`. Returns the device folder."""
+    from .. import boards
+    dev = os.path.join(root, "sys", "bus", "pci", "devices", slot)
+    os.makedirs(dev, exist_ok=True)
+    for name, val in zip(("vendor", "device", "subsystem_vendor", "subsystem_device"),
+                         boards.AE7_PCI):
+        with open(os.path.join(dev, name), "w") as f:
+            f.write(f"0x{val:04x}\n")
+    link = os.path.join(dev, "driver")
+    if os.path.lexists(link):
+        os.remove(link)
+    if driver:
+        target = os.path.join(root, "sys", "bus", "pci", "drivers", driver)
+        os.makedirs(target, exist_ok=True)
+        os.symlink(target, link)
+    for f in boards.AE7_PARK_FILES:
+        path = os.path.join(root, f)
+        if parked:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            open(path, "w").close()
+        elif os.path.exists(path):
+            os.remove(path)
+    if point:
+        boards.ROOT = root
+    return dev
+
+
 from .pipewire import (  # noqa: E402,F401
     FakeLinker, FakePipeWire, make_fake_capture,
     MIC, MIC_DESC, OPTICAL, OPTICAL_OUT, REAR_RCA, SINK, WHAT_U_HEAR, WUH_OFFSET_DB,

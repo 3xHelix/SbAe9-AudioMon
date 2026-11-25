@@ -238,8 +238,13 @@ def _names(root):
 
 
 def _driver(card_dir):
+    return _pci_driver(os.path.join(card_dir, "device"))
+
+
+def _pci_driver(dev):
+    """The driver bound to a PCI device's sysfs folder, "-" as "_"; None if none."""
     try:
-        return os.path.basename(os.readlink(os.path.join(card_dir, "device", "driver"))).replace("-", "_")
+        return os.path.basename(os.readlink(os.path.join(dev, "driver"))).replace("-", "_")
     except OSError:
         return None
 
@@ -312,6 +317,61 @@ def card_id():
     machine behaves as before detection."""
     c = current()
     return c.id if c else DEFAULT_ID
+
+
+# An AE-7 the driver doesn't run (driver 0.13.0: the AE-7 is opt-in, `ae7=1`
+# via `sudo ae9-ae7-enable`; see the driver's docs/AE7.md). The kernel's own
+# driver (snd_hda_intel) hangs the PC at boot on AE-7s behind an ASMedia
+# bridge, so turning the support off "parks" such a card: two park files hand
+# it to this driver, which leaves it alone, so no driver runs it.
+AE7_PCI = (CREATIVE, 0x0010, CREATIVE, 0x0081)   # vendor, device, subsystem vendor, device
+                                                 # (as ae9-ae7-enable matches it)
+AE7_PARK_FILES = ("etc/udev/rules.d/00-ae7-park.rules", "etc/modprobe.d/ae7-park.conf")
+AE7_ENABLE = "sudo ae9-ae7-enable"               # then reboot
+AE7_STATUS = "ae9-ae7-enable --status"
+# Each state: what's going on (one sentence, for both apps), the command to
+# offer, and whether a reboot follows it. The apps add their own framing
+# ("Sound Blaster AE-7 found", "Copy command", ...).
+AE7_WAITING = {
+    "kernel": ("The AE-7 is on the kernel's own driver: the driver's experimental "
+               "AE-7 support is off.", AE7_ENABLE, True),
+    "parked": ("The AE-7 is parked: the driver's experimental AE-7 support is off, "
+               "and no driver runs the card (the kernel's own driver can hang the PC "
+               "at boot on AE-7s with an ASMedia bridge, most from 2022 on), so it "
+               "plays nothing.", AE7_ENABLE, True),
+    "unbound": ("Enabling the AE-7's experimental support isn't finished: no driver "
+                "runs the card.", AE7_STATUS, False),
+}
+
+
+def ae7_waiting(root=None):
+    """An AE-7 the driver doesn't run, first one by PCI address:
+        "kernel"   on another driver (the kernel's snd_hda_intel): support off
+        "parked"   on no driver, and a park file is there: support off, parked
+        "unbound"  on no driver, no park file: enabling isn't finished
+        None       no AE-7, or this driver runs it
+    Words and commands: AE7_WAITING[state]."""
+    root = ROOT if root is None else root
+    devices = os.path.join(root, "sys", "bus", "pci", "devices")
+    try:
+        entries = sorted(os.listdir(devices))
+    except OSError:
+        return None
+    for e in entries:
+        d = os.path.join(devices, e)
+        ids = tuple(_hex(_read(os.path.join(d, f))) for f in
+                    ("vendor", "device", "subsystem_vendor", "subsystem_device"))
+        if ids != AE7_PCI:
+            continue
+        drv = _pci_driver(d)
+        if drv == DRIVER:
+            continue
+        if drv:
+            return "kernel"
+        if any(os.path.exists(os.path.join(root, f)) for f in AE7_PARK_FILES):
+            return "parked"
+        return "unbound"
+    return None
 
 
 def model_for_props(props):
